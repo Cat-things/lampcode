@@ -21,11 +21,7 @@ async fn real_provider_round_trip() {
     let reg = PresetRegistry::load(&source_builtin_dir(), None).unwrap();
     let candidates = [
         ("groq", "GROQ_API_KEY", "llama-3.1-8b-instant"),
-        (
-            "openrouter",
-            "OPENROUTER_API_KEY",
-            "nvidia/nemotron-3.5-lightning:free",
-        ),
+        ("openrouter", "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-lightning:free"),
         ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
     ];
     let (id, key, default_model) = if let Ok(m) = std::env::var("LAMPCODE_SMOKE_OLLAMA_MODEL") {
