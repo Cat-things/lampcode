@@ -331,7 +331,24 @@ Filled in during Task 2.6. Every preset from §2.2 starts here until its officia
 
 ## Dependency audit
 
-Every crate/npm package added gets a line: name, version, checked for telemetry (yes/no), notes. Starts empty, filled as deps are added. Known watch items: Astro telemetry (disable via `astro telemetry disable` + `ASTRO_TELEMETRY_DISABLED=1` in CI), Next-style CLIs not used, Tauri CLI has no telemetry.
+Every crate/npm package added gets a line. "Checked" = source grepped for posthog/sentry/segment/mixpanel/amplitude/google-analytics/telemetry/analytics endpoints, hits reviewed by hand. Known watch item for M9: Astro has CLI telemetry (disable via `ASTRO_TELEMETRY_DISABLED=1` in scripts and CI).
+
+| Package | Version | Checked | Notes |
+|---|---|---|---|
+| tauri / tauri-build | 2.12.7 / 2.7.6 | yes, clean | |
+| tauri-specta / specta / specta-typescript | 2.0.0-rc.29 / 2.0.0-rc.28 / 0.0.15 | yes, clean | beta, pinned with `=` |
+| regex | 1.13.2 | yes, clean | |
+| tracing / tracing-subscriber | 0.1.44 / 0.3.23 | yes, clean | one hit = OpenTelemetry doc link |
+| keyring / keyring-core | 4.2.0 / 1.0.1 | yes, clean | zbus Secret Service on Linux (pure Rust) |
+| age | 0.12.1 | yes, clean | |
+| zeroize, thiserror, serde, serde_json, tokio | latest 1.x/2.x | yes, clean | |
+| sqlx (+core, sqlite) | 0.9.1 | yes, clean | |
+| tempfile (dev) | 3.27.0 | n/a | tests only |
+| react, react-dom | 19.x | yes, clean | react-dom hits = SVG `amplitude` attribute |
+| @tauri-apps/api, @tauri-apps/cli | 2.x | yes, clean | |
+| vite, @vitejs/plugin-react, typescript | 8.x / 6.x / 6.0 | yes, clean | |
+| tailwindcss, @tailwindcss/vite | 4.x | yes, clean | |
+| vitest, jsdom, @testing-library/{react,dom,user-event}, @types/node | dev | yes, clean | jsdom hit = color math |
 
 ## Skills
 
