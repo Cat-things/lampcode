@@ -1,0 +1,9 @@
+{
+  "name": "lampcode-workspace",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test",
+    "gen:ipc": "pnpm --filter lampcode gen:ipc"
+  },
+  "packageManager": "pnpm@12.18.0"
+}
