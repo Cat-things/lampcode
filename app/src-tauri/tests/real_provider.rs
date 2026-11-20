@@ -24,7 +24,7 @@ async fn real_provider_round_trip() {
         (
             "openrouter",
             "OPENROUTER_API_KEY",
-            "meta-llama/llama-3.3-70b-instruct:free",
+            "nvidia/nemotron-3.5-lightning:free",
         ),
         ("gemini", "GEMINI_API_KEY", "gemini-2.5-flash"),
     ];

@@ -187,7 +187,7 @@ lampcode/
 - [x] Picker: search, stars, sorts (Cheapest/Fastest/Newest/Context/Favorites), FREE badge, ctx, tools/vision icons, headroom bars (unknown state), "Free only" toggle.
 - [x] Chat: streaming markdown + syntax highlight, per-turn tokens/cost footer, messages persisted in SQLite.
 - [x] Vitest: picker sorting + free filter. Rust integration: `plain_chat_against_mock_streams_and_persists`.
-- [ ] Manual: chat end to end with one real free model (Groq or OpenRouter `:free`). Needs the maintainer's key: run the app, or `cargo test --test real_provider -- --ignored --nocapture` with `GROQ_API_KEY` set. **Milestone 2 done** once this passes.
+- [x] Manual: chat end to end with one real free model. Passed 2026-11-20 via `tests/real_provider.rs` on OpenRouter `nvidia/nemotron-3.5-lightning:free` and `baidu/ernie-5.5-flash-preview:free` (model list, streaming, usage, $0 cost). Several other `:free` models returned 429 from upstream pools, which surfaced cleanly as `RateLimited`. **Milestone 2 done.**
 
 ## Milestone 2.5: Providers (everything else)
 
