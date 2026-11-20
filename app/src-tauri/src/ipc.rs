@@ -2,9 +2,11 @@
 //! registered here; `app/src/ipc/bindings.ts` is generated from this builder
 //! and must never be edited by hand.
 
+use crate::security::keys::{self, KeyPreview, KeyStore, KeychainSelfTest, OsKeychain, SecretBackend};
+use age::secrecy::SecretString;
 use serde::Serialize;
 use specta::Type;
-use tauri::{AppHandle, Manager, Runtime, Wry};
+use tauri::{AppHandle, Manager, Runtime, State, Wry};
 use tauri_specta::{collect_commands, Builder};
 
 /// Path of the generated bindings, relative to `src-tauri/`.
@@ -33,8 +35,67 @@ fn app_info<R: Runtime>(app: AppHandle<R>) -> Result<AppInfo, String> {
     })
 }
 
+fn ui_err(e: impl std::fmt::Display) -> String {
+    crate::security::redact(&e.to_string()).into_owned()
+}
+
+/// The frontend sends a key once, here; it never gets the full key back.
+#[tauri::command]
+#[specta::specta]
+fn key_set(keys: State<'_, KeyStore>, provider_id: String, key: String) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("The key is empty.".into());
+    }
+    keys.set(&provider_id, SecretString::from(key)).map_err(ui_err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn key_delete(keys: State<'_, KeyStore>, provider_id: String) -> Result<(), String> {
+    keys.delete(&provider_id).map_err(ui_err)
+}
+
+#[tauri::command]
+#[specta::specta]
+fn key_preview(keys: State<'_, KeyStore>, provider_id: String) -> Result<Option<KeyPreview>, String> {
+    keys.preview(&provider_id).map_err(ui_err)
+}
+
+/// Unlock the encrypted key file (only used when there is no OS keychain).
+/// The passphrase stays in memory until the app quits.
+#[tauri::command]
+#[specta::specta]
+fn age_unlock(keys: State<'_, KeyStore>, passphrase: String) -> Result<(), String> {
+    if passphrase.is_empty() {
+        return Err("The passphrase is empty.".into());
+    }
+    keys.age().unlock(SecretString::from(passphrase));
+    if keys.age().exists() {
+        // Fail fast on a wrong passphrase instead of on the next key lookup.
+        keys.age().get("__probe__").map_err(ui_err)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+fn keychain_self_test() -> KeychainSelfTest {
+    keys::self_test(&OsKeychain::new(KEYCHAIN_SELFTEST_SERVICE))
+}
+
+pub const KEYCHAIN_SERVICE: &str = "LampCode";
+const KEYCHAIN_SELFTEST_SERVICE: &str = "LampCode-selftest";
+
 pub fn builder() -> Builder<Wry> {
-    Builder::<Wry>::new().commands(collect_commands![app_info::<Wry>])
+    Builder::<Wry>::new().commands(collect_commands![
+        app_info::<Wry>,
+        key_set,
+        key_delete,
+        key_preview,
+        age_unlock,
+        keychain_self_test,
+    ])
 }
 
 fn export_to(path: &std::path::Path) {

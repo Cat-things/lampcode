@@ -9,6 +9,16 @@ import type { InvokeOptions } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	appInfo: (options?: InvokeOptions) => __TAURI_INVOKE<AppInfo>("app_info", undefined, options),
+	/**  The frontend sends a key once, here; it never gets the full key back. */
+	keySet: (providerId: string, key: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("key_set", { providerId, key }, options),
+	keyDelete: (providerId: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("key_delete", { providerId }, options),
+	keyPreview: (providerId: string, options?: InvokeOptions) => __TAURI_INVOKE<KeyPreview | null>("key_preview", { providerId }, options),
+	/**
+	 *  Unlock the encrypted key file (only used when there is no OS keychain).
+	 *  The passphrase stays in memory until the app quits.
+	 */
+	ageUnlock: (passphrase: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("age_unlock", { passphrase }, options),
+	keychainSelfTest: (options?: InvokeOptions) => __TAURI_INVOKE<KeychainSelfTest>("keychain_self_test", undefined, options),
 };
 
 /* Types */
@@ -16,4 +26,16 @@ export type AppInfo = {
 	name: string,
 	version: string,
 	dataDir: string,
+};
+
+export type KeyPreview = {
+	source: KeySource,
+	masked: string,
+};
+
+export type KeySource = "Env" | "Keychain" | "AgeFile";
+
+export type KeychainSelfTest = {
+	ok: boolean,
+	message: string,
 };
