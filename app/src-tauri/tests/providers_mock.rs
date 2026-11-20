@@ -41,7 +41,11 @@ fn endpoint(server: &MockServer, preset: Preset, path: &str) -> (Endpoint, Arc<A
 }
 
 fn req(model: &str) -> ChatRequest {
-    ChatRequest { model: model.into(), messages: vec![ChatMessage::user("hi")], ..Default::default() }
+    ChatRequest {
+        model: model.into(),
+        messages: vec![ChatMessage::user("hi")],
+        ..Default::default()
+    }
 }
 
 async fn collect(p: &dyn lampcode_lib::providers::Provider, r: ChatRequest) -> Result<Vec<ChatEvent>, ProviderError> {
@@ -54,7 +58,15 @@ async fn collect(p: &dyn lampcode_lib::providers::Provider, r: ChatRequest) -> R
 }
 
 fn text(evs: &[ChatEvent]) -> String {
-    evs.iter().filter_map(|e| if let ChatEvent::TextDelta(t) = e { Some(t.as_str()) } else { None }).collect()
+    evs.iter()
+        .filter_map(|e| {
+            if let ChatEvent::TextDelta(t) = e {
+                Some(t.as_str())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -74,15 +86,23 @@ async fn openai_stream_text_with_ratelimit_headers_and_extra_headers() {
     }
     server.push(reply);
     let p = adapters::build(ep);
-    let evs = collect(p.as_ref(), req("meta-llama/llama-3.3-70b-instruct:free")).await.unwrap();
+    let evs = collect(p.as_ref(), req("meta-llama/llama-3.3-70b-instruct:free"))
+        .await
+        .unwrap();
     assert_eq!(text(&evs), "Hello");
     assert!(matches!(&evs[0], ChatEvent::RateLimit(info) if info.headroom() == Some(0.4)));
     let seen = &server.seen()[0];
     assert_eq!(seen.path, "/api/v1/chat/completions");
-    assert_eq!(seen.body["model"], "meta-llama/llama-3.3-70b-instruct:free", ":free id kept as is");
+    assert_eq!(
+        seen.body["model"], "meta-llama/llama-3.3-70b-instruct:free",
+        ":free id kept as is"
+    );
     assert_eq!(seen.headers["http-referer"], "https://github.com/Cat-things/lampcode");
     assert_eq!(seen.headers["x-openrouter-title"], "LampCode");
-    assert_eq!(seen.headers["authorization"].to_str().unwrap(), format!("Bearer {}", fake_key()));
+    assert_eq!(
+        seen.headers["authorization"].to_str().unwrap(),
+        format!("Bearer {}", fake_key())
+    );
 }
 
 #[tokio::test]
@@ -97,17 +117,32 @@ async fn openai_stream_tool_calls() {
     let evs = collect(adapters::build(ep).as_ref(), req("m")).await.unwrap();
     let args: String = evs
         .iter()
-        .filter_map(|e| if let ChatEvent::ToolCallDelta { args_delta, .. } = e { Some(args_delta.as_str()) } else { None })
+        .filter_map(|e| {
+            if let ChatEvent::ToolCallDelta { args_delta, .. } = e {
+                Some(args_delta.as_str())
+            } else {
+                None
+            }
+        })
         .collect();
     assert_eq!(args, r#"{"p":1}"#);
-    assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "tool_calls".into() }));
+    assert_eq!(
+        evs.last(),
+        Some(&ChatEvent::Done {
+            stop_reason: "tool_calls".into()
+        })
+    );
 }
 
 #[tokio::test]
 async fn rate_limited_with_retry_after() {
     let server = MockServer::start().await;
     let (ep, _) = endpoint(&server, preset_json("openai_chat", "{}"), "/v1");
-    server.push(Reply::Status { status: 429, headers: vec![("retry-after", "12".into())], body: "slow down".into() });
+    server.push(Reply::Status {
+        status: 429,
+        headers: vec![("retry-after", "12".into())],
+        body: "slow down".into(),
+    });
     let err = collect(adapters::build(ep).as_ref(), req("m")).await.unwrap_err();
     assert_eq!(err, ProviderError::RateLimited { retry_after: Some(12) });
 }
@@ -116,7 +151,11 @@ async fn rate_limited_with_retry_after() {
 async fn server_error_body_is_redacted() {
     let server = MockServer::start().await;
     let (ep, _) = endpoint(&server, preset_json("openai_chat", "{}"), "/v1");
-    server.push(Reply::Status { status: 500, headers: vec![], body: format!("upstream said: bad key {}", fake_key()) });
+    server.push(Reply::Status {
+        status: 500,
+        headers: vec![],
+        body: format!("upstream said: bad key {}", fake_key()),
+    });
     let err = collect(adapters::build(ep).as_ref(), req("m")).await.unwrap_err();
     assert!(matches!(err, ProviderError::Server { status: 500, .. }));
     assert!(!err.to_string().contains(&fake_key()));
@@ -127,13 +166,17 @@ async fn server_error_body_is_redacted() {
 async fn cancel_mid_stream_ends_with_cancelled() {
     let server = MockServer::start().await;
     let (ep, _) = endpoint(&server, preset_json("openai_chat", "{}"), "/v1");
-    server.push(Reply::Stall { chunks: vec!["data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n".into()] });
+    server.push(Reply::Stall {
+        chunks: vec!["data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n".into()],
+    });
     let cancel = CancellationToken::new();
     let p = adapters::build(ep);
     let mut s = p.chat_stream(req("m"), cancel.clone()).await.unwrap();
     assert_eq!(s.next().await.unwrap().unwrap(), ChatEvent::TextDelta("a".into()));
     cancel.cancel();
-    let next = tokio::time::timeout(std::time::Duration::from_secs(5), s.next()).await.expect("cancel is prompt");
+    let next = tokio::time::timeout(std::time::Duration::from_secs(5), s.next())
+        .await
+        .expect("cancel is prompt");
     assert_eq!(next.unwrap().unwrap_err(), ProviderError::Cancelled);
     assert!(s.next().await.is_none());
 }
@@ -144,7 +187,10 @@ async fn slow_stream_still_completes() {
     let (ep, _) = endpoint(&server, preset_json("openai_chat", "{}"), "/v1");
     server.push(Reply::Stream {
         content_type: "text/event-stream",
-        chunks: vec!["data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n".into(), "data: [DONE]\n\n".into()],
+        chunks: vec![
+            "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n".into(),
+            "data: [DONE]\n\n".into(),
+        ],
         delay_ms: 300,
         headers: vec![],
     });
@@ -179,14 +225,21 @@ async fn openai_list_models() {
     let (ep, _) = endpoint(&server, preset_json("openai_chat", "{}"), "/v1");
     server.push(Reply::json(serde_json::json!({"data":[{"id":"a"},{"id":"b:free"}]})));
     let models = adapters::build(ep).list_models().await.unwrap();
-    assert_eq!(models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["a", "b:free"]);
+    assert_eq!(
+        models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        ["a", "b:free"]
+    );
     assert_eq!(server.seen()[0].path, "/v1/models");
 }
 
 #[tokio::test]
 async fn anthropic_headers_and_stream() {
     let server = MockServer::start().await;
-    let (ep, _) = endpoint(&server, preset_json("anthropic", r#"{"anthropic_version":"2023-06-01"}"#), "");
+    let (ep, _) = endpoint(
+        &server,
+        preset_json("anthropic", r#"{"anthropic_version":"2023-06-01"}"#),
+        "",
+    );
     server.push(Reply::Stream {
         content_type: "text/event-stream",
         chunks: vec![
@@ -200,7 +253,12 @@ async fn anthropic_headers_and_stream() {
     });
     let evs = collect(adapters::build(ep).as_ref(), req("claude-x")).await.unwrap();
     assert_eq!(text(&evs), "Yo");
-    assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "stop".into() }));
+    assert_eq!(
+        evs.last(),
+        Some(&ChatEvent::Done {
+            stop_reason: "stop".into()
+        })
+    );
     let seen = &server.seen()[0];
     assert_eq!(seen.path, "/v1/messages");
     assert_eq!(seen.headers["x-api-key"].to_str().unwrap(), fake_key());
@@ -230,7 +288,11 @@ async fn ollama_chat_tags_pull_delete() {
     });
     server.push(Reply::json(serde_json::json!({"models":[{"name":"llama3:8b"}]})));
     server.push(Reply::json(serde_json::json!({"status":"success"})));
-    server.push(Reply::Status { status: 200, headers: vec![], body: String::new() });
+    server.push(Reply::Status {
+        status: 200,
+        headers: vec![],
+        body: String::new(),
+    });
 
     let client = lampcode_lib::providers::adapters::ollama::Ollama(ep.clone());
     let evs = collect(&client, req("llama3:8b")).await.unwrap();
@@ -239,12 +301,22 @@ async fn ollama_chat_tags_pull_delete() {
     assert_eq!(client.list_models().await.unwrap()[0].id, "llama3:8b");
     client.pull("llama3:8b").await.unwrap();
     client.delete("llama3:8b").await.unwrap();
-    let paths: Vec<_> = server.seen().iter().map(|r| (r.method.to_string(), r.path.clone())).collect();
-    assert_eq!(paths, [
-        ("POST".to_string(), "/api/chat".to_string()),
-        ("GET".into(), "/api/tags".into()),
-        ("POST".into(), "/api/pull".into()),
-        ("DELETE".into(), "/api/delete".into()),
-    ]);
-    assert!(server.seen()[0].headers.get("authorization").is_none(), "no key, no auth header");
+    let paths: Vec<_> = server
+        .seen()
+        .iter()
+        .map(|r| (r.method.to_string(), r.path.clone()))
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            ("POST".to_string(), "/api/chat".to_string()),
+            ("GET".into(), "/api/tags".into()),
+            ("POST".into(), "/api/pull".into()),
+            ("DELETE".into(), "/api/delete".into()),
+        ]
+    );
+    assert!(
+        server.seen()[0].headers.get("authorization").is_none(),
+        "no key, no auth header"
+    );
 }

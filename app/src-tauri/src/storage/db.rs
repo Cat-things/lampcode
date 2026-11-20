@@ -1,6 +1,6 @@
 use super::settings::Settings;
-use serde::{Serialize, de::DeserializeOwned};
 use crate::security::redact;
+use serde::{Serialize, de::DeserializeOwned};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
 use std::str::FromStr;
@@ -76,12 +76,14 @@ impl Db {
     pub async fn put_json<T: Serialize>(&self, key: &str, value: &T) -> Result<(), StorageError> {
         let json = serde_json::to_string(value).map_err(|e| StorageError::Encode(e.to_string()))?;
         let json = redact(&json);
-        sqlx::query("INSERT INTO settings (key, json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET json = excluded.json")
-            .bind(key)
-            .bind(json.as_ref())
-            .execute(&self.pool)
-            .await
-            .map_err(db_err)?;
+        sqlx::query(
+            "INSERT INTO settings (key, json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET json = excluded.json",
+        )
+        .bind(key)
+        .bind(json.as_ref())
+        .execute(&self.pool)
+        .await
+        .map_err(db_err)?;
         Ok(())
     }
 
@@ -126,7 +128,15 @@ mod tests {
         let db = Db::open_in_memory().await.unwrap();
         assert_eq!(
             tables(&db).await,
-            ["allowlist_log", "messages", "messages_fts", "projects", "sessions", "settings", "spend"]
+            [
+                "allowlist_log",
+                "messages",
+                "messages_fts",
+                "projects",
+                "sessions",
+                "settings",
+                "spend"
+            ]
         );
     }
 
@@ -134,7 +144,11 @@ mod tests {
     async fn opening_a_file_twice_keeps_data() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested").join("lampcode.db");
-        let s = Settings { theme: Theme::Light, update_check: UpdateCheck::Disabled, ..Default::default() };
+        let s = Settings {
+            theme: Theme::Light,
+            update_check: UpdateCheck::Disabled,
+            ..Default::default()
+        };
         Db::open(&path).await.unwrap().set_settings(&s).await.unwrap();
         assert_eq!(Db::open(&path).await.unwrap().settings().await.unwrap(), s);
     }
@@ -150,7 +164,12 @@ mod tests {
     #[tokio::test]
     async fn settings_round_trip() {
         let db = Db::open_in_memory().await.unwrap();
-        let s = Settings { theme: Theme::System, update_check: UpdateCheck::Enabled, favorite_models: vec!["groq/llama".into()], ..Default::default() };
+        let s = Settings {
+            theme: Theme::System,
+            update_check: UpdateCheck::Enabled,
+            favorite_models: vec!["groq/llama".into()],
+            ..Default::default()
+        };
         db.set_settings(&s).await.unwrap();
         assert_eq!(db.settings().await.unwrap(), s);
     }

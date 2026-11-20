@@ -86,11 +86,19 @@ fn yes() -> bool {
 
 impl Preset {
     pub fn host(&self) -> Option<String> {
-        url::Url::parse(&self.base_url).ok()?.host_str().map(str::to_ascii_lowercase)
+        url::Url::parse(&self.base_url)
+            .ok()?
+            .host_str()
+            .map(str::to_ascii_lowercase)
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.id.is_empty() || !self.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        if self.id.is_empty()
+            || !self
+                .id
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
             return Err(format!("id {:?} must be lowercase letters, digits and dashes", self.id));
         }
         if chrono::NaiveDate::parse_from_str(&self.checked, "%Y-%m-%d").is_err() {
@@ -148,13 +156,19 @@ fn json_files(dir: &Path) -> Result<Vec<PathBuf>, PresetError> {
 }
 
 fn file_name(p: &Path) -> String {
-    p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    p.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 pub fn parse_preset(name: &str, text: &str) -> Result<Preset, PresetError> {
-    let preset: Preset =
-        serde_json::from_str(text).map_err(|e| PresetError::Invalid { file: name.into(), msg: e.to_string() })?;
-    preset.validate().map_err(|msg| PresetError::Invalid { file: name.into(), msg })?;
+    let preset: Preset = serde_json::from_str(text).map_err(|e| PresetError::Invalid {
+        file: name.into(),
+        msg: e.to_string(),
+    })?;
+    preset
+        .validate()
+        .map_err(|msg| PresetError::Invalid { file: name.into(), msg })?;
     Ok(preset)
 }
 
@@ -170,7 +184,11 @@ impl PresetRegistry {
             let text = std::fs::read_to_string(&path).map_err(|e| PresetError::Io(format!("{name}: {e}")))?;
             let preset = parse_preset(&name, &text)?;
             if let Some(first) = seen.insert(preset.id.clone(), name.clone()) {
-                return Err(PresetError::Duplicate { id: preset.id, first, second: name });
+                return Err(PresetError::Duplicate {
+                    id: preset.id,
+                    first,
+                    second: name,
+                });
             }
             reg.presets.insert(preset.id.clone(), (preset, Origin::Builtin));
         }
@@ -223,7 +241,9 @@ impl PresetRegistry {
 
 /// Directory of the bundled presets when running from the source tree.
 pub fn source_builtin_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("providers")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources")
+        .join("providers")
 }
 
 #[cfg(test)]
@@ -247,7 +267,11 @@ mod tests {
         assert!(reg.all().count() >= 8, "expected the first batch of presets");
         for p in reg.all() {
             assert!(p.docs_url.starts_with("https://"), "{}: docs_url", p.id);
-            assert!(chrono::NaiveDate::parse_from_str(&p.checked, "%Y-%m-%d").is_ok(), "{}: checked", p.id);
+            assert!(
+                chrono::NaiveDate::parse_from_str(&p.checked, "%Y-%m-%d").is_ok(),
+                "{}: checked",
+                p.id
+            );
             assert!(p.host().is_some(), "{}: base_url host", p.id);
             if p.key_required {
                 assert!(p.key_env.is_some(), "{}: keyed provider needs key_env", p.id);
@@ -269,7 +293,14 @@ mod tests {
         write(dir.path(), "a.json", &minimal("same"));
         write(dir.path(), "b.json", &minimal("same"));
         let err = PresetRegistry::load(dir.path(), None).unwrap_err();
-        assert_eq!(err, PresetError::Duplicate { id: "same".into(), first: "a.json".into(), second: "b.json".into() });
+        assert_eq!(
+            err,
+            PresetError::Duplicate {
+                id: "same".into(),
+                first: "a.json".into(),
+                second: "b.json".into()
+            }
+        );
         let msg = err.to_string();
         assert!(msg.contains("a.json") && msg.contains("b.json"));
     }
@@ -279,7 +310,11 @@ mod tests {
         let builtin = tempfile::tempdir().unwrap();
         let user = tempfile::tempdir().unwrap();
         write(builtin.path(), "groq.json", &minimal("groq"));
-        write(user.path(), "evil.json", &minimal("groq").replace("api.example.com", "evil.example.net"));
+        write(
+            user.path(),
+            "evil.json",
+            &minimal("groq").replace("api.example.com", "evil.example.net"),
+        );
         write(user.path(), "mine.json", &minimal("mine"));
         let reg = PresetRegistry::load(builtin.path(), Some(user.path())).unwrap();
         assert_eq!(reg.get("groq").unwrap().base_url, "https://api.example.com/v1");
@@ -310,6 +345,12 @@ mod tests {
     fn bad_dates_and_ids_are_rejected() {
         assert!(parse_preset("a.json", &minimal("a").replace("2026-11-20", "Nov 20")).is_err());
         assert!(parse_preset("a.json", &minimal("Bad_Id")).is_err());
-        assert!(parse_preset("a.json", &minimal("a").replace(r#""region":"US""#, r#""region":"US","surprise":1"#)).is_err());
+        assert!(
+            parse_preset(
+                "a.json",
+                &minimal("a").replace(r#""region":"US""#, r#""region":"US","surprise":1"#)
+            )
+            .is_err()
+        );
     }
 }

@@ -72,7 +72,8 @@ impl StreamState for OllamaStream {
     type Item = String;
 
     fn on_item(&mut self, line: String) -> Result<(Vec<ChatEvent>, bool), ProviderError> {
-        let v: Value = serde_json::from_str(&line).map_err(|e| ProviderError::Other(format!("bad stream line: {e}")))?;
+        let v: Value =
+            serde_json::from_str(&line).map_err(|e| ProviderError::Other(format!("bad stream line: {e}")))?;
         if let Some(err) = v.get("error").and_then(Value::as_str) {
             return Err(ProviderError::Other(crate::security::redact(err).into_owned()));
         }
@@ -92,16 +93,30 @@ impl StreamState for OllamaStream {
                     index,
                     id: Some(format!("call_{index}")),
                     name: c.pointer("/function/name").and_then(Value::as_str).map(String::from),
-                    args_delta: c.pointer("/function/arguments").map(|a| a.to_string()).unwrap_or_else(|| "{}".into()),
+                    args_delta: c
+                        .pointer("/function/arguments")
+                        .map(|a| a.to_string())
+                        .unwrap_or_else(|| "{}".into()),
                 });
             }
         }
         if v["done"].as_bool() == Some(true) {
             out.extend(self.think.finish());
             let n = |k: &str| v[k].as_u64().unwrap_or(0) as u32;
-            out.push(ChatEvent::Usage(Usage { input: n("prompt_eval_count"), output: n("eval_count"), cached: 0, cost: Some(0.0) }));
-            let reason = if self.calls > 0 { "tool_calls" } else { v["done_reason"].as_str().unwrap_or("stop") };
-            out.push(ChatEvent::Done { stop_reason: reason.into() });
+            out.push(ChatEvent::Usage(Usage {
+                input: n("prompt_eval_count"),
+                output: n("eval_count"),
+                cached: 0,
+                cost: Some(0.0),
+            }));
+            let reason = if self.calls > 0 {
+                "tool_calls"
+            } else {
+                v["done_reason"].as_str().unwrap_or("stop")
+            };
+            out.push(ChatEvent::Done {
+                stop_reason: reason.into(),
+            });
             return Ok((out, true));
         }
         Ok((out, false))
@@ -109,7 +124,9 @@ impl StreamState for OllamaStream {
 
     fn on_eof(&mut self) -> Vec<ChatEvent> {
         let mut out = self.think.finish();
-        out.push(ChatEvent::Done { stop_reason: "eof".into() });
+        out.push(ChatEvent::Done {
+            stop_reason: "eof".into(),
+        });
         out
     }
 }
@@ -124,10 +141,11 @@ impl Ollama {
     /// Download a model. Waits until Ollama reports it is done.
     pub async fn pull(&self, model: &str) -> Result<(), ProviderError> {
         let e = &self.0;
-        let rb = e
-            .client
-            .request(reqwest::Method::POST, &e.url("api/pull"))
-            .map(|r| r.headers(self.headers()).timeout(std::time::Duration::from_secs(6 * 3600)).json(&json!({ "model": model, "stream": false })));
+        let rb = e.client.request(reqwest::Method::POST, &e.url("api/pull")).map(|r| {
+            r.headers(self.headers())
+                .timeout(std::time::Duration::from_secs(6 * 3600))
+                .json(&json!({ "model": model, "stream": false }))
+        });
         let (resp, _) = send(e, rb, &CancellationToken::new()).await?;
         let v: Value = resp.json().await.map_err(ProviderError::from_reqwest)?;
         match v.get("error").and_then(Value::as_str) {
@@ -138,7 +156,10 @@ impl Ollama {
 
     pub async fn delete(&self, model: &str) -> Result<(), ProviderError> {
         let e = &self.0;
-        let rb = e.client.request(reqwest::Method::DELETE, &e.url("api/delete")).map(|r| r.headers(self.headers()).json(&json!({ "model": model })));
+        let rb = e
+            .client
+            .request(reqwest::Method::DELETE, &e.url("api/delete"))
+            .map(|r| r.headers(self.headers()).json(&json!({ "model": model })));
         send(e, rb, &CancellationToken::new()).await.map(|_| ())
     }
 }
@@ -148,14 +169,25 @@ impl Provider for Ollama {
     async fn chat_stream(&self, req: ChatRequest, cancel: CancellationToken) -> Result<EventStream, ProviderError> {
         let e = &self.0;
         let body = build_body(&req, &e.preset.quirks);
-        let rb = e.client.request(reqwest::Method::POST, &e.url("api/chat")).map(|r| r.headers(self.headers()).json(&body));
+        let rb = e
+            .client
+            .request(reqwest::Method::POST, &e.url("api/chat"))
+            .map(|r| r.headers(self.headers()).json(&body));
         let (resp, _) = send(e, rb, &cancel).await?;
-        Ok(drive(ndjson_lines(resp.bytes_stream()), OllamaStream::default(), vec![], cancel))
+        Ok(drive(
+            ndjson_lines(resp.bytes_stream()),
+            OllamaStream::default(),
+            vec![],
+            cancel,
+        ))
     }
 
     async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let e = &self.0;
-        let rb = e.client.request(reqwest::Method::GET, &e.url("api/tags")).map(|r| r.headers(self.headers()));
+        let rb = e
+            .client
+            .request(reqwest::Method::GET, &e.url("api/tags"))
+            .map(|r| r.headers(self.headers()));
         let (resp, _) = send(e, rb, &CancellationToken::new()).await?;
         let v: Value = resp.json().await.map_err(ProviderError::from_reqwest)?;
         Ok(v["models"]
@@ -189,7 +221,11 @@ mod tests {
             messages: vec![
                 ChatMessage::user("hi"),
                 ChatMessage {
-                    tool_calls: vec![ToolCall { id: "call_0".into(), name: "ls".into(), arguments: r#"{"path":"."}"#.into() }],
+                    tool_calls: vec![ToolCall {
+                        id: "call_0".into(),
+                        name: "ls".into(),
+                        arguments: r#"{"path":"."}"#.into(),
+                    }],
                     ..ChatMessage::assistant("")
                 },
                 ChatMessage::tool_result("call_0", "a.txt"),
@@ -224,8 +260,18 @@ mod tests {
         assert!(out.contains(&ChatEvent::ReasoningDelta("hmm".into())));
         assert!(out.contains(&ChatEvent::TextDelta("Hi".into())));
         assert!(out.iter().any(|e| matches!(e, ChatEvent::ToolCallDelta { name: Some(n), args_delta, .. } if n == "ls" && args_delta == r#"{"path":"."}"#)));
-        assert!(out.contains(&ChatEvent::Usage(Usage { input: 12, output: 4, cached: 0, cost: Some(0.0) })));
-        assert_eq!(out.last(), Some(&ChatEvent::Done { stop_reason: "tool_calls".into() }));
+        assert!(out.contains(&ChatEvent::Usage(Usage {
+            input: 12,
+            output: 4,
+            cached: 0,
+            cost: Some(0.0)
+        })));
+        assert_eq!(
+            out.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "tool_calls".into()
+            })
+        );
     }
 
     #[test]

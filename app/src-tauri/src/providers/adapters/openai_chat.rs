@@ -3,10 +3,8 @@
 use super::{Endpoint, StreamState, drive, json_path_f64, send};
 use crate::providers::quirks::{Quirks, ReasoningLoc, ToolSupport};
 use crate::providers::sse::{SseEvent, sse_events};
-use crate::providers::text_tools::{ThinkExtractor, TextToolParser, render_call, tool_instructions};
-use crate::providers::{
-    ChatEvent, ChatRequest, EventStream, ModelInfo, Provider, ProviderError, Role, Usage,
-};
+use crate::providers::text_tools::{TextToolParser, ThinkExtractor, render_call, tool_instructions};
+use crate::providers::{ChatEvent, ChatRequest, EventStream, ModelInfo, Provider, ProviderError, Role, Usage};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
@@ -43,7 +41,11 @@ pub fn build_body(req: &ChatRequest, q: &Quirks) -> Value {
                         .map(|c| json!({ "id": c.id, "type": "function", "function": { "name": c.name, "arguments": c.arguments } }))
                         .collect();
                 }
-                msg["content"] = if content.is_empty() && msg.get("tool_calls").is_some() { Value::Null } else { json!(content) };
+                msg["content"] = if content.is_empty() && msg.get("tool_calls").is_some() {
+                    Value::Null
+                } else {
+                    json!(content)
+                };
                 if q.send_reasoning_back
                     && let Some(r) = &m.reasoning
                 {
@@ -125,7 +127,10 @@ impl OpenAiStream {
         Usage {
             input: n("prompt_tokens"),
             output: n("completion_tokens"),
-            cached: u.pointer("/prompt_tokens_details/cached_tokens").and_then(Value::as_u64).unwrap_or(0) as u32,
+            cached: u
+                .pointer("/prompt_tokens_details/cached_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32,
             cost: self.cost_field.as_deref().and_then(|p| json_path_f64(u, p)),
         }
     }
@@ -142,7 +147,9 @@ impl OpenAiStream {
                 self.finish_reason = Some("tool_calls".into());
             }
         }
-        out.push(ChatEvent::Done { stop_reason: self.finish_reason.clone().unwrap_or_else(|| "eof".into()) });
+        out.push(ChatEvent::Done {
+            stop_reason: self.finish_reason.clone().unwrap_or_else(|| "eof".into()),
+        });
         out
     }
 }
@@ -158,7 +165,8 @@ impl StreamState for OpenAiStream {
         if data.is_empty() {
             return Ok((vec![], false));
         }
-        let v: Value = serde_json::from_str(data).map_err(|e| ProviderError::Other(format!("bad stream chunk: {e}")))?;
+        let v: Value =
+            serde_json::from_str(data).map_err(|e| ProviderError::Other(format!("bad stream chunk: {e}")))?;
         if let Some(err) = v.get("error") {
             let msg = err.get("message").and_then(Value::as_str).unwrap_or("stream error");
             let code = err.get("code").and_then(Value::as_u64).unwrap_or(500) as u16;
@@ -186,7 +194,11 @@ impl StreamState for OpenAiStream {
                         index: c.get("index").and_then(Value::as_u64).unwrap_or(pos as u64) as u32,
                         id: c.get("id").and_then(Value::as_str).map(String::from),
                         name: c.pointer("/function/name").and_then(Value::as_str).map(String::from),
-                        args_delta: c.pointer("/function/arguments").and_then(Value::as_str).unwrap_or("").to_string(),
+                        args_delta: c
+                            .pointer("/function/arguments")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
                     });
                 }
             }
@@ -194,7 +206,10 @@ impl StreamState for OpenAiStream {
                 self.finish_reason = Some(f.to_string());
             }
         }
-        let usage = v.get("usage").filter(|u| u.is_object()).or_else(|| v.pointer("/x_groq/usage"));
+        let usage = v
+            .get("usage")
+            .filter(|u| u.is_object())
+            .or_else(|| v.pointer("/x_groq/usage"));
         if let Some(u) = usage {
             out.push(ChatEvent::Usage(self.usage(u)));
         }
@@ -246,11 +261,23 @@ impl Provider for OpenAiChat {
         let body = build_body(&req, q);
         let mut headers = e.base_headers();
         e.bearer(&mut headers);
-        let rb = e.client.request(reqwest::Method::POST, &e.url("chat/completions")).map(|r| r.headers(headers).json(&body));
+        let rb = e
+            .client
+            .request(reqwest::Method::POST, &e.url("chat/completions"))
+            .map(|r| r.headers(headers).json(&body));
         let (resp, info) = send(e, rb, &cancel).await?;
-        let first = if info.is_empty() { vec![] } else { vec![ChatEvent::RateLimit(info)] };
+        let first = if info.is_empty() {
+            vec![]
+        } else {
+            vec![ChatEvent::RateLimit(info)]
+        };
         let text_tools = q.tools == ToolSupport::None && !req.tools.is_empty();
-        Ok(drive(sse_events(resp.bytes_stream()), OpenAiStream::new(q, text_tools), first, cancel))
+        Ok(drive(
+            sse_events(resp.bytes_stream()),
+            OpenAiStream::new(q, text_tools),
+            first,
+            cancel,
+        ))
     }
 
     async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
@@ -258,7 +285,10 @@ impl Provider for OpenAiChat {
         e.require_key()?;
         let mut headers = e.base_headers();
         e.bearer(&mut headers);
-        let rb = e.client.request(reqwest::Method::GET, &e.url("models")).map(|r| r.headers(headers));
+        let rb = e
+            .client
+            .request(reqwest::Method::GET, &e.url("models"))
+            .map(|r| r.headers(headers));
         let (resp, _) = send(e, rb, &CancellationToken::new()).await?;
         let v: Value = resp.json().await.map_err(ProviderError::from_reqwest)?;
         Ok(parse_models(&v))
@@ -283,13 +313,22 @@ mod tests {
     }
 
     fn tool() -> ToolSpec {
-        ToolSpec { name: "ls".into(), description: "list files".into(), parameters: json!({"type":"object"}) }
+        ToolSpec {
+            name: "ls".into(),
+            description: "list files".into(),
+            parameters: json!({"type":"object"}),
+        }
     }
 
     fn run(state: &mut OpenAiStream, chunks: &[&str]) -> Vec<ChatEvent> {
         let mut out = Vec::new();
         for c in chunks {
-            let (evs, end) = state.on_item(SseEvent { event: None, data: c.to_string() }).unwrap();
+            let (evs, end) = state
+                .on_item(SseEvent {
+                    event: None,
+                    data: c.to_string(),
+                })
+                .unwrap();
             out.extend(evs);
             if end {
                 return out;
@@ -300,15 +339,34 @@ mod tests {
     }
 
     fn text(evs: &[ChatEvent]) -> String {
-        evs.iter().filter_map(|e| if let ChatEvent::TextDelta(t) = e { Some(t.as_str()) } else { None }).collect()
+        evs.iter()
+            .filter_map(|e| {
+                if let ChatEvent::TextDelta(t) = e {
+                    Some(t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     fn reasoning(evs: &[ChatEvent]) -> String {
-        evs.iter().filter_map(|e| if let ChatEvent::ReasoningDelta(t) = e { Some(t.as_str()) } else { None }).collect()
+        evs.iter()
+            .filter_map(|e| {
+                if let ChatEvent::ReasoningDelta(t) = e {
+                    Some(t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     #[test]
     fn max_completion_tokens_field() {
-        let q = Quirks { max_tokens_field: MaxTokensField::MaxCompletionTokens, ..Default::default() };
+        let q = Quirks {
+            max_tokens_field: MaxTokensField::MaxCompletionTokens,
+            ..Default::default()
+        };
         let b = build_body(&req(), &q);
         assert_eq!(b["max_completion_tokens"], 100);
         assert!(b.get("max_tokens").is_none());
@@ -317,15 +375,24 @@ mod tests {
 
     #[test]
     fn temperature_dropped_or_clamped() {
-        let omit = Quirks { temperature: TempRule::Omit, ..Default::default() };
+        let omit = Quirks {
+            temperature: TempRule::Omit,
+            ..Default::default()
+        };
         assert!(build_body(&req(), &omit).get("temperature").is_none());
-        let clamp = Quirks { temperature: TempRule::Clamp { min: 0.0, max: 1.0 }, ..Default::default() };
+        let clamp = Quirks {
+            temperature: TempRule::Clamp { min: 0.0, max: 1.0 },
+            ..Default::default()
+        };
         assert_eq!(build_body(&req(), &clamp)["temperature"], 1.0);
     }
 
     #[test]
     fn stream_usage_option() {
-        let q = Quirks { stream_usage: true, ..Default::default() };
+        let q = Quirks {
+            stream_usage: true,
+            ..Default::default()
+        };
         assert_eq!(build_body(&req(), &q)["stream_options"]["include_usage"], true);
         assert!(build_body(&req(), &Quirks::default()).get("stream_options").is_none());
     }
@@ -335,87 +402,156 @@ mod tests {
         let mut r = req();
         r.tools = vec![tool()];
         r.messages.push(ChatMessage {
-            tool_calls: vec![ToolCall { id: "c1".into(), name: "ls".into(), arguments: "{}".into() }],
+            tool_calls: vec![ToolCall {
+                id: "c1".into(),
+                name: "ls".into(),
+                arguments: "{}".into(),
+            }],
             ..ChatMessage::assistant("")
         });
         r.messages.push(ChatMessage::tool_result("c1", "a.txt"));
-        let q = Quirks { tools: ToolSupport::NoParallel, ..Default::default() };
+        let q = Quirks {
+            tools: ToolSupport::NoParallel,
+            ..Default::default()
+        };
         let b = build_body(&r, &q);
         assert_eq!(b["tools"][0]["function"]["name"], "ls");
         assert_eq!(b["parallel_tool_calls"], false);
         assert_eq!(b["messages"][2]["tool_calls"][0]["id"], "c1");
         assert!(b["messages"][2]["content"].is_null());
-        assert_eq!(b["messages"][3], json!({"role":"tool","tool_call_id":"c1","content":"a.txt"}));
+        assert_eq!(
+            b["messages"][3],
+            json!({"role":"tool","tool_call_id":"c1","content":"a.txt"})
+        );
     }
 
     #[test]
     fn reasoning_content_vs_reasoning_vs_think_tags() {
         let q = Quirks::default(); // Auto
-        let evs = run(&mut OpenAiStream::new(&q, false), &[
-            r#"{"choices":[{"delta":{"reasoning_content":"hmm "}}]}"#,
-            r#"{"choices":[{"delta":{"reasoning":"ok"}}]}"#,
-            r#"{"choices":[{"delta":{"content":"<think>more</think>Hi"}}]}"#,
-            "[DONE]",
-        ]);
+        let evs = run(
+            &mut OpenAiStream::new(&q, false),
+            &[
+                r#"{"choices":[{"delta":{"reasoning_content":"hmm "}}]}"#,
+                r#"{"choices":[{"delta":{"reasoning":"ok"}}]}"#,
+                r#"{"choices":[{"delta":{"content":"<think>more</think>Hi"}}]}"#,
+                "[DONE]",
+            ],
+        );
         assert_eq!(reasoning(&evs), "hmm okmore");
         assert_eq!(text(&evs), "Hi");
 
-        let q = Quirks { reasoning: ReasoningLoc::None, ..Default::default() };
-        let evs = run(&mut OpenAiStream::new(&q, false), &[r#"{"choices":[{"delta":{"content":"<think>x</think>y","reasoning":"z"}}]}"#]);
+        let q = Quirks {
+            reasoning: ReasoningLoc::None,
+            ..Default::default()
+        };
+        let evs = run(
+            &mut OpenAiStream::new(&q, false),
+            &[r#"{"choices":[{"delta":{"content":"<think>x</think>y","reasoning":"z"}}]}"#],
+        );
         assert_eq!(text(&evs), "<think>x</think>y");
         assert_eq!(reasoning(&evs), "");
     }
 
     #[test]
     fn cost_field_and_usage_are_read() {
-        let q = Quirks { cost_field: Some("cost".into()), ..Default::default() };
-        let evs = run(&mut OpenAiStream::new(&q, false), &[
-            r#"{"choices":[{"delta":{"content":"a"},"finish_reason":"stop"}]}"#,
-            r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":4},"cost":0.0012}}"#,
-            "[DONE]",
-        ]);
-        assert!(evs.contains(&ChatEvent::Usage(Usage { input: 10, output: 3, cached: 4, cost: Some(0.0012) })));
-        assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "stop".into() }));
+        let q = Quirks {
+            cost_field: Some("cost".into()),
+            ..Default::default()
+        };
+        let evs = run(
+            &mut OpenAiStream::new(&q, false),
+            &[
+                r#"{"choices":[{"delta":{"content":"a"},"finish_reason":"stop"}]}"#,
+                r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":4},"cost":0.0012}}"#,
+                "[DONE]",
+            ],
+        );
+        assert!(evs.contains(&ChatEvent::Usage(Usage {
+            input: 10,
+            output: 3,
+            cached: 4,
+            cost: Some(0.0012)
+        })));
+        assert_eq!(
+            evs.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "stop".into()
+            })
+        );
     }
 
     #[test]
     fn tool_call_args_across_many_deltas() {
-        let evs = run(&mut OpenAiStream::new(&Quirks::default(), false), &[
-            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"ls","arguments":""}}]}}]}"#,
-            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"pa"}}]}}]}"#,
-            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":\".\"}"}}]},"finish_reason":"tool_calls"}]}"#,
-            "[DONE]",
-        ]);
+        let evs = run(
+            &mut OpenAiStream::new(&Quirks::default(), false),
+            &[
+                r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"ls","arguments":""}}]}}]}"#,
+                r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"pa"}}]}}]}"#,
+                r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":\".\"}"}}]},"finish_reason":"tool_calls"}]}"#,
+                "[DONE]",
+            ],
+        );
         let args: String = evs
             .iter()
-            .filter_map(|e| if let ChatEvent::ToolCallDelta { args_delta, .. } = e { Some(args_delta.as_str()) } else { None })
+            .filter_map(|e| {
+                if let ChatEvent::ToolCallDelta { args_delta, .. } = e {
+                    Some(args_delta.as_str())
+                } else {
+                    None
+                }
+            })
             .collect();
         assert_eq!(args, r#"{"path":"."}"#);
-        assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "tool_calls".into() }));
+        assert_eq!(
+            evs.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "tool_calls".into()
+            })
+        );
     }
 
     #[test]
     fn stream_eof_without_done_finishes_turn() {
-        let evs = run(&mut OpenAiStream::new(&Quirks::default(), false), &[r#"{"choices":[{"delta":{"content":"partial <thi"}}]}"#]);
+        let evs = run(
+            &mut OpenAiStream::new(&Quirks::default(), false),
+            &[r#"{"choices":[{"delta":{"content":"partial <thi"}}]}"#],
+        );
         assert_eq!(text(&evs), "partial <thi");
         assert_eq!(evs.iter().filter(|e| matches!(e, ChatEvent::Done { .. })).count(), 1);
-        assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "eof".into() }));
+        assert_eq!(
+            evs.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "eof".into()
+            })
+        );
     }
 
     #[test]
     fn mid_stream_error_is_an_error() {
         let mut s = OpenAiStream::new(&Quirks::default(), false);
-        let err = s.on_item(SseEvent { event: None, data: r#"{"error":{"message":"overloaded","code":503}}"#.into() }).unwrap_err();
+        let err = s
+            .on_item(SseEvent {
+                event: None,
+                data: r#"{"error":{"message":"overloaded","code":503}}"#.into(),
+            })
+            .unwrap_err();
         assert!(matches!(err, ProviderError::Server { status: 503, .. }));
     }
 
     #[test]
     fn tool_support_none_uses_text_protocol_round_trip() {
-        let q = Quirks { tools: ToolSupport::None, ..Default::default() };
+        let q = Quirks {
+            tools: ToolSupport::None,
+            ..Default::default()
+        };
         let mut r = req();
         r.tools = vec![tool()];
         r.messages.push(ChatMessage {
-            tool_calls: vec![ToolCall { id: "call_text_0".into(), name: "ls".into(), arguments: r#"{"path":"."}"#.into() }],
+            tool_calls: vec![ToolCall {
+                id: "call_text_0".into(),
+                name: "ls".into(),
+                arguments: r#"{"path":"."}"#.into(),
+            }],
             ..ChatMessage::assistant("Looking. ")
         });
         r.messages.push(ChatMessage::tool_result("call_text_0", "a.txt"));
@@ -430,8 +566,16 @@ mod tests {
         let chunk = json!({"choices":[{"delta":{"content": sent}}]}).to_string();
         let evs = run(&mut OpenAiStream::new(&q, true), &[&chunk, "[DONE]"]);
         assert_eq!(text(&evs), "Looking. ");
-        assert!(evs.iter().any(|e| matches!(e, ChatEvent::ToolCallDelta { name: Some(n), .. } if n == "ls")));
-        assert_eq!(evs.last(), Some(&ChatEvent::Done { stop_reason: "tool_calls".into() }));
+        assert!(
+            evs.iter()
+                .any(|e| matches!(e, ChatEvent::ToolCallDelta { name: Some(n), .. } if n == "ls"))
+        );
+        assert_eq!(
+            evs.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "tool_calls".into()
+            })
+        );
     }
 
     #[test]

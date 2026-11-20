@@ -4,9 +4,9 @@ mod support;
 
 use age::secrecy::SecretString;
 use lampcode_lib::agent::{SessionEvent, TurnInput, run_turn};
+use lampcode_lib::providers::Role;
 use lampcode_lib::providers::adapters::{self, Endpoint};
 use lampcode_lib::providers::preset::parse_preset;
-use lampcode_lib::providers::Role;
 use lampcode_lib::security::net::{Allowlist, GuardedClient};
 use lampcode_lib::storage::{Db, ModelRef};
 use std::sync::{Arc, Mutex};
@@ -40,10 +40,16 @@ async fn plain_chat_against_mock_streams_and_persists() {
         r#"{"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":500}}"#,
         "[DONE]",
     ]));
-    server.push(Reply::sse(&[r#"{"choices":[{"delta":{"content":"again"},"finish_reason":"stop"}]}"#, "[DONE]"]));
+    server.push(Reply::sse(&[
+        r#"{"choices":[{"delta":{"content":"again"},"finish_reason":"stop"}]}"#,
+        "[DONE]",
+    ]));
 
     let db = Db::open_in_memory().await.unwrap();
-    let model = ModelRef { provider_id: "mock".into(), model_id: "m-1".into() };
+    let model = ModelRef {
+        provider_id: "mock".into(),
+        model_id: "m-1".into(),
+    };
     let session = db.create_session(None, None).await.unwrap();
     let provider = adapters::build(endpoint(&server));
     let events = Mutex::new(Vec::new());
@@ -67,7 +73,16 @@ async fn plain_chat_against_mock_streams_and_persists() {
     assert_eq!(saved.content, "Hello there");
     assert_eq!(saved.cost, Some(0.007), "1000 in at $2/M + 500 out at $10/M");
     let evs = events.lock().unwrap().clone();
-    let deltas: String = evs.iter().filter_map(|e| if let SessionEvent::TextDelta { text } = e { Some(text.as_str()) } else { None }).collect();
+    let deltas: String = evs
+        .iter()
+        .filter_map(|e| {
+            if let SessionEvent::TextDelta { text } = e {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
     assert_eq!(deltas, "Hello there");
     assert!(matches!(evs.first(), Some(SessionEvent::UserSaved { .. })));
     assert!(matches!(evs.last(), Some(SessionEvent::Finished { stop_reason, .. }) if stop_reason == "stop"));
@@ -96,7 +111,12 @@ async fn plain_chat_against_mock_streams_and_persists() {
     .await
     .unwrap();
     let body = &server.seen()[1].body;
-    let roles: Vec<&str> = body["messages"].as_array().unwrap().iter().map(|m| m["role"].as_str().unwrap()).collect();
+    let roles: Vec<&str> = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["role"].as_str().unwrap())
+        .collect();
     assert_eq!(roles, ["system", "user", "assistant", "user"]);
     assert_eq!(db.messages(&session.id).await.unwrap().len(), 4);
 }
@@ -104,7 +124,10 @@ async fn plain_chat_against_mock_streams_and_persists() {
 #[tokio::test]
 async fn failed_turn_keeps_partial_text_marked_as_error() {
     let server = MockServer::start().await;
-    server.push(Reply::sse(&[r#"{"choices":[{"delta":{"content":"half"}}]}"#, r#"{"error":{"message":"boom","code":502}}"#]));
+    server.push(Reply::sse(&[
+        r#"{"choices":[{"delta":{"content":"half"}}]}"#,
+        r#"{"error":{"message":"boom","code":502}}"#,
+    ]));
     let db = Db::open_in_memory().await.unwrap();
     let session = db.create_session(None, None).await.unwrap();
     let provider = adapters::build(endpoint(&server));
@@ -112,7 +135,10 @@ async fn failed_turn_keeps_partial_text_marked_as_error() {
         TurnInput {
             db: &db,
             provider: provider.as_ref(),
-            model: ModelRef { provider_id: "mock".into(), model_id: "m".into() },
+            model: ModelRef {
+                provider_id: "mock".into(),
+                model_id: "m".into(),
+            },
             session_id: &session.id,
             user_text: "go".into(),
             prices: None,

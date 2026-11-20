@@ -1,7 +1,9 @@
 //! One chat turn: store the user message, stream the model's answer to the UI,
 //! store the answer with usage and cost.
 
-use crate::providers::{ChatEvent, ChatMessage, ChatRequest, Provider, ProviderError, RateLimitInfo, Role, ToolCall, Usage};
+use crate::providers::{
+    ChatEvent, ChatMessage, ChatRequest, Provider, ProviderError, RateLimitInfo, Role, ToolCall, Usage,
+};
 use crate::storage::sessions::StoredMessage;
 use crate::storage::{Db, ModelRef};
 use futures_util::StreamExt;
@@ -17,14 +19,34 @@ Be direct and concise. Use Markdown, and fenced code blocks with a language tag 
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum SessionEvent {
-    UserSaved { message: StoredMessage },
-    Started { message_id: String, model: ModelRef },
-    TextDelta { text: String },
-    ReasoningDelta { text: String },
-    Usage { usage: Usage },
-    RateLimit { provider_id: String, info: RateLimitInfo },
-    Finished { message: StoredMessage, stop_reason: String },
-    Error { message: String, saved: Option<StoredMessage> },
+    UserSaved {
+        message: StoredMessage,
+    },
+    Started {
+        message_id: String,
+        model: ModelRef,
+    },
+    TextDelta {
+        text: String,
+    },
+    ReasoningDelta {
+        text: String,
+    },
+    Usage {
+        usage: Usage,
+    },
+    RateLimit {
+        provider_id: String,
+        info: RateLimitInfo,
+    },
+    Finished {
+        message: StoredMessage,
+        stop_reason: String,
+    },
+    Error {
+        message: String,
+        saved: Option<StoredMessage>,
+    },
 }
 
 pub struct TurnInput<'a> {
@@ -55,7 +77,9 @@ fn history(stored: &[StoredMessage]) -> Vec<ChatMessage> {
 }
 
 pub fn turn_cost(usage: &Usage, prices: Option<(f64, f64)>) -> Option<f64> {
-    usage.cost.or_else(|| prices.map(|(i, o)| (usage.input as f64 * i + usage.output as f64 * o) / 1_000_000.0))
+    usage
+        .cost
+        .or_else(|| prices.map(|(i, o)| (usage.input as f64 * i + usage.output as f64 * o) / 1_000_000.0))
 }
 
 #[derive(Default)]
@@ -68,31 +92,43 @@ struct Partial {
 
 /// Run one turn. Returns the stored assistant message. Errors and
 /// cancellation still store whatever text arrived, marked with `error`.
-pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send + Sync)) -> Result<StoredMessage, String> {
+pub async fn run_turn(
+    input: TurnInput<'_>,
+    emit: &(dyn Fn(SessionEvent) + Send + Sync),
+) -> Result<StoredMessage, String> {
     let db = input.db;
     let err = |e: crate::storage::StorageError| crate::security::redact(&e.to_string()).into_owned();
-    let session = db.session(input.session_id).await.map_err(err)?.ok_or("session not found")?;
+    let session = db
+        .session(input.session_id)
+        .await
+        .map_err(err)?
+        .ok_or("session not found")?;
     if session.title.is_empty() {
         let title: String = input.user_text.lines().next().unwrap_or("").chars().take(60).collect();
         db.rename_session(input.session_id, &title).await.map_err(err)?;
     }
     if session.model.as_ref() != Some(&input.model) {
-        db.set_session_model(input.session_id, &input.model).await.map_err(err)?;
+        db.set_session_model(input.session_id, &input.model)
+            .await
+            .map_err(err)?;
     }
     let user = db
-        .append_message(input.session_id, StoredMessage {
-            id: String::new(),
-            role: Role::User,
-            content: input.user_text.clone(),
-            reasoning: None,
-            tool_calls: vec![],
-            tool_call_id: None,
-            model: None,
-            usage: None,
-            cost: None,
-            error: None,
-            created_at: 0,
-        })
+        .append_message(
+            input.session_id,
+            StoredMessage {
+                id: String::new(),
+                role: Role::User,
+                content: input.user_text.clone(),
+                reasoning: None,
+                tool_calls: vec![],
+                tool_call_id: None,
+                model: None,
+                usage: None,
+                cost: None,
+                error: None,
+                created_at: 0,
+            },
+        )
         .await
         .map_err(err)?;
     emit(SessionEvent::UserSaved { message: user });
@@ -107,7 +143,10 @@ pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send 
         tools: vec![],
     };
     let message_id = uuid::Uuid::new_v4().to_string();
-    emit(SessionEvent::Started { message_id: message_id.clone(), model: input.model.clone() });
+    emit(SessionEvent::Started {
+        message_id: message_id.clone(),
+        model: input.model.clone(),
+    });
 
     let mut p = Partial::default();
     let outcome: Result<String, ProviderError> = async {
@@ -123,8 +162,17 @@ pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send 
                     p.reasoning.push_str(&t);
                     emit(SessionEvent::ReasoningDelta { text: t });
                 }
-                ChatEvent::ToolCallDelta { index, id, name, args_delta } => {
-                    let c = p.calls.entry(index).or_insert_with(|| ToolCall { id: String::new(), name: String::new(), arguments: String::new() });
+                ChatEvent::ToolCallDelta {
+                    index,
+                    id,
+                    name,
+                    args_delta,
+                } => {
+                    let c = p.calls.entry(index).or_insert_with(|| ToolCall {
+                        id: String::new(),
+                        name: String::new(),
+                        arguments: String::new(),
+                    });
                     if let Some(id) = id {
                         c.id = id;
                     }
@@ -138,7 +186,10 @@ pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send 
                     emit(SessionEvent::Usage { usage: u });
                 }
                 ChatEvent::RateLimit(info) => {
-                    emit(SessionEvent::RateLimit { provider_id: input.model.provider_id.clone(), info });
+                    emit(SessionEvent::RateLimit {
+                        provider_id: input.model.provider_id.clone(),
+                        info,
+                    });
                 }
                 ChatEvent::Done { stop_reason } => {
                     stop = stop_reason;
@@ -168,11 +219,20 @@ pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send 
         Ok(stop) => {
             let saved = db.append_message(input.session_id, stored).await.map_err(err)?;
             if let Some(u) = &saved.usage {
-                db.record_spend(&input.model.provider_id, &input.model.model_id, Some(input.session_id), u, saved.cost.unwrap_or(0.0))
-                    .await
-                    .map_err(err)?;
+                db.record_spend(
+                    &input.model.provider_id,
+                    &input.model.model_id,
+                    Some(input.session_id),
+                    u,
+                    saved.cost.unwrap_or(0.0),
+                )
+                .await
+                .map_err(err)?;
             }
-            emit(SessionEvent::Finished { message: saved.clone(), stop_reason: stop });
+            emit(SessionEvent::Finished {
+                message: saved.clone(),
+                stop_reason: stop,
+            });
             Ok(saved)
         }
         Err(e) => {
@@ -184,7 +244,10 @@ pub async fn run_turn(input: TurnInput<'_>, emit: &(dyn Fn(SessionEvent) + Send 
             } else {
                 Some(db.append_message(input.session_id, stored).await.map_err(err)?)
             };
-            emit(SessionEvent::Error { message: msg.clone(), saved });
+            emit(SessionEvent::Error {
+                message: msg.clone(),
+                saved,
+            });
             Err(msg)
         }
     }
@@ -196,9 +259,17 @@ mod tests {
 
     #[test]
     fn cost_prefers_provider_value() {
-        let u = Usage { input: 1_000_000, output: 500_000, cached: 0, cost: None };
+        let u = Usage {
+            input: 1_000_000,
+            output: 500_000,
+            cached: 0,
+            cost: None,
+        };
         assert_eq!(turn_cost(&u, Some((1.0, 4.0))), Some(3.0));
-        assert_eq!(turn_cost(&Usage { cost: Some(0.01), ..u }, Some((1.0, 4.0))), Some(0.01));
+        assert_eq!(
+            turn_cost(&Usage { cost: Some(0.01), ..u }, Some((1.0, 4.0))),
+            Some(0.01)
+        );
         assert_eq!(turn_cost(&u, None), None);
     }
 

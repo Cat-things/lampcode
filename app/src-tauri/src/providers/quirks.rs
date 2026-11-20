@@ -143,7 +143,10 @@ mod tests {
 
     #[test]
     fn free_suffix_detection() {
-        let rule = ModelIdRule { free_suffix: Some(":free".into()), vendor_prefix: true };
+        let rule = ModelIdRule {
+            free_suffix: Some(":free".into()),
+            vendor_prefix: true,
+        };
         assert!(rule.is_free_variant("meta-llama/llama-3.3-70b-instruct:free"));
         assert!(!rule.is_free_variant("meta-llama/llama-3.3-70b-instruct"));
         assert!(!ModelIdRule::default().is_free_variant("x:free"));

@@ -53,13 +53,26 @@ pub struct ChatMessage {
 
 impl ChatMessage {
     pub fn user(text: impl Into<String>) -> Self {
-        Self { role: Role::User, content: text.into(), reasoning: None, tool_calls: vec![], tool_call_id: None }
+        Self {
+            role: Role::User,
+            content: text.into(),
+            reasoning: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+        }
     }
     pub fn assistant(text: impl Into<String>) -> Self {
-        Self { role: Role::Assistant, ..Self::user(text) }
+        Self {
+            role: Role::Assistant,
+            ..Self::user(text)
+        }
     }
     pub fn tool_result(call_id: impl Into<String>, text: impl Into<String>) -> Self {
-        Self { role: Role::Tool, tool_call_id: Some(call_id.into()), ..Self::user(text) }
+        Self {
+            role: Role::Tool,
+            tool_call_id: Some(call_id.into()),
+            ..Self::user(text)
+        }
     }
 }
 
@@ -97,10 +110,17 @@ pub enum ChatEvent {
     ReasoningDelta(String),
     /// Pieces of a tool call. `id` and `name` arrive on the first piece of each
     /// `index`; `args_delta` pieces are concatenated in order.
-    ToolCallDelta { index: u32, id: Option<String>, name: Option<String>, args_delta: String },
+    ToolCallDelta {
+        index: u32,
+        id: Option<String>,
+        name: Option<String>,
+        args_delta: String,
+    },
     Usage(Usage),
     RateLimit(RateLimitInfo),
-    Done { stop_reason: String },
+    Done {
+        stop_reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
@@ -141,7 +161,11 @@ impl ProviderError {
     pub fn display_redacted(&self) -> String {
         let s = self.to_string();
         let s = redact(&s).into_owned();
-        if s.chars().count() > 600 { s.chars().take(600).collect::<String>() + "..." } else { s }
+        if s.chars().count() > 600 {
+            s.chars().take(600).collect::<String>() + "..."
+        } else {
+            s
+        }
     }
 
     pub fn from_status(status: u16, body: &str, retry_after: Option<u64>) -> Self {
@@ -185,16 +209,31 @@ mod tests {
         let shown = e.display_redacted();
         assert!(!shown.contains(&key), "{shown}");
         assert!(shown.contains("[REDACTED"));
-        let e = ProviderError::Server { status: 500, body: format!("echo: Bearer {key}") };
+        let e = ProviderError::Server {
+            status: 500,
+            body: format!("echo: Bearer {key}"),
+        };
         assert!(!e.display_redacted().contains(&key));
     }
 
     #[test]
     fn status_mapping() {
-        assert_eq!(ProviderError::from_status(429, "", Some(7)), ProviderError::RateLimited { retry_after: Some(7) });
-        assert!(matches!(ProviderError::from_status(403, "no", None), ProviderError::Auth(_)));
-        assert!(matches!(ProviderError::from_status(503, "", None), ProviderError::Server { status: 503, .. }));
-        assert_eq!(ProviderError::RateLimited { retry_after: Some(3) }.to_string(), "rate limited, retry in 3s");
+        assert_eq!(
+            ProviderError::from_status(429, "", Some(7)),
+            ProviderError::RateLimited { retry_after: Some(7) }
+        );
+        assert!(matches!(
+            ProviderError::from_status(403, "no", None),
+            ProviderError::Auth(_)
+        ));
+        assert!(matches!(
+            ProviderError::from_status(503, "", None),
+            ProviderError::Server { status: 503, .. }
+        ));
+        assert_eq!(
+            ProviderError::RateLimited { retry_after: Some(3) }.to_string(),
+            "rate limited, retry in 3s"
+        );
     }
 
     #[test]

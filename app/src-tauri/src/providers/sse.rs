@@ -100,7 +100,10 @@ impl SseParser {
             self.event = None;
             return;
         }
-        out.push(SseEvent { event: self.event.take(), data: self.data.join("\n") });
+        out.push(SseEvent {
+            event: self.event.take(),
+            data: self.data.join("\n"),
+        });
         self.data.clear();
     }
 }
@@ -121,10 +124,19 @@ pub struct NdjsonParser {
 
 impl NdjsonParser {
     pub fn push(&mut self, chunk: &[u8]) -> Result<Vec<String>, String> {
-        Ok(self.lines.push(chunk)?.into_iter().filter(|l| !l.trim().is_empty()).collect())
+        Ok(self
+            .lines
+            .push(chunk)?
+            .into_iter()
+            .filter(|l| !l.trim().is_empty())
+            .collect())
     }
     pub fn finish(&mut self) -> Vec<String> {
-        self.lines.finish().into_iter().filter(|l| !l.trim().is_empty()).collect()
+        self.lines
+            .finish()
+            .into_iter()
+            .filter(|l| !l.trim().is_empty())
+            .collect()
     }
 }
 
@@ -150,7 +162,12 @@ where
 {
     let bytes = Box::pin(bytes);
     futures_util::stream::unfold(
-        (bytes, parser, std::collections::VecDeque::<Result<T, String>>::new(), false),
+        (
+            bytes,
+            parser,
+            std::collections::VecDeque::<Result<T, String>>::new(),
+            false,
+        ),
         move |(mut bytes, mut parser, mut queue, mut ended)| async move {
             loop {
                 if let Some(item) = queue.pop_front() {
@@ -210,8 +227,15 @@ mod tests {
 
     #[test]
     fn crlf_comments_event_names_and_multiline_data() {
-        let evs = parse_all(&[b": ping\r\nevent: message_start\r\ndata: {\"a\":1}\r\n\r\ndata: line1\ndata: line2\n\n"]);
-        assert_eq!(evs[0], SseEvent { event: Some("message_start".into()), data: "{\"a\":1}".into() });
+        let evs =
+            parse_all(&[b": ping\r\nevent: message_start\r\ndata: {\"a\":1}\r\n\r\ndata: line1\ndata: line2\n\n"]);
+        assert_eq!(
+            evs[0],
+            SseEvent {
+                event: Some("message_start".into()),
+                data: "{\"a\":1}".into()
+            }
+        );
         assert_eq!(evs[1].data, "line1\nline2");
         assert_eq!(evs[1].event, None);
     }
@@ -219,7 +243,13 @@ mod tests {
     #[test]
     fn eof_without_blank_line_still_flushes() {
         let evs = parse_all(&[b"data: {\"x\":1}"]);
-        assert_eq!(evs, vec![SseEvent { event: None, data: "{\"x\":1}".into() }]);
+        assert_eq!(
+            evs,
+            vec![SseEvent {
+                event: None,
+                data: "{\"x\":1}".into()
+            }]
+        );
     }
 
     #[test]

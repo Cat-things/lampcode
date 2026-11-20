@@ -14,9 +14,18 @@ use std::time::Duration;
 #[derive(Clone, Debug)]
 pub enum Reply {
     /// Stream these raw chunks with a delay between them.
-    Stream { content_type: &'static str, chunks: Vec<String>, delay_ms: u64, headers: Vec<(&'static str, String)> },
+    Stream {
+        content_type: &'static str,
+        chunks: Vec<String>,
+        delay_ms: u64,
+        headers: Vec<(&'static str, String)>,
+    },
     /// A plain response.
-    Status { status: u16, headers: Vec<(&'static str, String)>, body: String },
+    Status {
+        status: u16,
+        headers: Vec<(&'static str, String)>,
+        body: String,
+    },
     /// Send headers, then stall forever after the first chunk.
     Stall { chunks: Vec<String> },
 }
@@ -31,7 +40,11 @@ impl Reply {
         }
     }
     pub fn json(body: serde_json::Value) -> Self {
-        Reply::Status { status: 200, headers: vec![("content-type", "application/json".into())], body: body.to_string() }
+        Reply::Status {
+            status: 200,
+            headers: vec![("content-type", "application/json".into())],
+            body: body.to_string(),
+        }
     }
 }
 
@@ -78,7 +91,13 @@ impl MockServer {
     }
 }
 
-async fn handle(State(inner): State<Arc<Mutex<Inner>>>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Response {
+async fn handle(
+    State(inner): State<Arc<Mutex<Inner>>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let reply = {
         let mut g = inner.lock().unwrap();
         g.seen.push(Recorded {
@@ -90,7 +109,10 @@ async fn handle(State(inner): State<Arc<Mutex<Inner>>>, method: Method, uri: Uri
         g.replies.pop_front()
     };
     let Some(reply) = reply else {
-        return Response::builder().status(StatusCode::NOT_IMPLEMENTED).body(Body::from("no scripted reply")).unwrap();
+        return Response::builder()
+            .status(StatusCode::NOT_IMPLEMENTED)
+            .body(Body::from("no scripted reply"))
+            .unwrap();
     };
     match reply {
         Reply::Status { status, headers, body } => {
@@ -100,7 +122,12 @@ async fn handle(State(inner): State<Arc<Mutex<Inner>>>, method: Method, uri: Uri
             }
             b.body(Body::from(body)).unwrap()
         }
-        Reply::Stream { content_type, chunks, delay_ms, headers } => {
+        Reply::Stream {
+            content_type,
+            chunks,
+            delay_ms,
+            headers,
+        } => {
             let s = futures_util::stream::unfold(chunks.into_iter(), move |mut it| async move {
                 let c = it.next()?;
                 if delay_ms > 0 {

@@ -25,7 +25,12 @@ pub struct TagSplitter {
 
 impl TagSplitter {
     pub fn new(open: &'static str, close: &'static str) -> Self {
-        Self { open, close, inside: false, pending: String::new() }
+        Self {
+            open,
+            close,
+            inside: false,
+            pending: String::new(),
+        }
     }
 
     pub fn push(&mut self, delta: &str) -> Vec<Segment> {
@@ -46,7 +51,10 @@ impl TagSplitter {
             // Keep the longest suffix that is a prefix of the tag.
             let keep = (1..tag.len().min(self.pending.len() + 1))
                 .rev()
-                .find(|&n| self.pending.is_char_boundary(self.pending.len() - n) && tag.starts_with(&self.pending[self.pending.len() - n..]))
+                .find(|&n| {
+                    self.pending.is_char_boundary(self.pending.len() - n)
+                        && tag.starts_with(&self.pending[self.pending.len() - n..])
+                })
                 .unwrap_or(0);
             let cut = self.pending.len() - keep;
             let text: String = self.pending.drain(..cut).collect();
@@ -70,7 +78,11 @@ impl TagSplitter {
         if text.is_empty() {
             return;
         }
-        out.push(if self.inside { Segment::Inside(text) } else { Segment::Outside(text) });
+        out.push(if self.inside {
+            Segment::Inside(text)
+        } else {
+            Segment::Outside(text)
+        });
     }
 }
 
@@ -116,15 +128,22 @@ pub fn tool_instructions(tools: &[ToolSpec]) -> String {
          Available tools:\n",
     );
     for t in tools {
-        s.push_str(&format!("- {}: {}\n  arguments schema: {}\n", t.name, t.description, t.parameters));
+        s.push_str(&format!(
+            "- {}: {}\n  arguments schema: {}\n",
+            t.name, t.description, t.parameters
+        ));
     }
     s
 }
 
 /// Render a past tool call back into text, for providers using this protocol.
 pub fn render_call(name: &str, arguments: &str) -> String {
-    let args: serde_json::Value = serde_json::from_str(arguments).unwrap_or(serde_json::Value::Object(Default::default()));
-    format!("{TOOL_OPEN}{}{TOOL_CLOSE}", serde_json::json!({ "name": name, "arguments": args }))
+    let args: serde_json::Value =
+        serde_json::from_str(arguments).unwrap_or(serde_json::Value::Object(Default::default()));
+    format!(
+        "{TOOL_OPEN}{}{TOOL_CLOSE}",
+        serde_json::json!({ "name": name, "arguments": args })
+    )
 }
 
 /// Pulls `<tool_call>` blocks out of streamed text and turns them into tool
@@ -138,7 +157,11 @@ pub struct TextToolParser {
 
 impl Default for TextToolParser {
     fn default() -> Self {
-        Self { split: TagSplitter::new(TOOL_OPEN, TOOL_CLOSE), body: String::new(), next_index: 0 }
+        Self {
+            split: TagSplitter::new(TOOL_OPEN, TOOL_CLOSE),
+            body: String::new(),
+            next_index: 0,
+        }
     }
 }
 
@@ -189,7 +212,11 @@ impl TextToolParser {
             Ok(c) if !c.name.is_empty() => {
                 let index = self.next_index;
                 self.next_index += 1;
-                let args = if c.arguments.is_null() { serde_json::json!({}) } else { c.arguments };
+                let args = if c.arguments.is_null() {
+                    serde_json::json!({})
+                } else {
+                    c.arguments
+                };
                 vec![ChatEvent::ToolCallDelta {
                     index,
                     id: Some(format!("call_text_{index}")),
@@ -207,10 +234,26 @@ mod tests {
     use super::*;
 
     fn text(evs: &[ChatEvent]) -> String {
-        evs.iter().filter_map(|e| if let ChatEvent::TextDelta(t) = e { Some(t.as_str()) } else { None }).collect()
+        evs.iter()
+            .filter_map(|e| {
+                if let ChatEvent::TextDelta(t) = e {
+                    Some(t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     fn reasoning(evs: &[ChatEvent]) -> String {
-        evs.iter().filter_map(|e| if let ChatEvent::ReasoningDelta(t) = e { Some(t.as_str()) } else { None }).collect()
+        evs.iter()
+            .filter_map(|e| {
+                if let ChatEvent::ReasoningDelta(t) = e {
+                    Some(t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     #[test]
@@ -246,7 +289,10 @@ mod tests {
         });
         let (name, args) = call.expect("tool call parsed");
         assert_eq!(name, "read_file");
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&args).unwrap(), serde_json::json!({"path": "src/main.rs"}));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&args).unwrap(),
+            serde_json::json!({"path": "src/main.rs"})
+        );
     }
 
     #[test]
@@ -269,7 +315,11 @@ mod tests {
 
     #[test]
     fn instructions_list_tools() {
-        let t = ToolSpec { name: "ls".into(), description: "list".into(), parameters: serde_json::json!({"type":"object"}) };
+        let t = ToolSpec {
+            name: "ls".into(),
+            description: "list".into(),
+            parameters: serde_json::json!({"type":"object"}),
+        };
         let s = tool_instructions(&[t]);
         assert!(s.contains("<tool_call>") && s.contains("- ls: list"));
     }

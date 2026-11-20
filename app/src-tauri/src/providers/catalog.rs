@@ -69,7 +69,11 @@ impl Snapshot {
         if providers.is_empty() {
             return Err("models.dev data has no providers".into());
         }
-        Ok(Snapshot { source: "https://models.dev/api.json".into(), fetched: fetched.into(), providers })
+        Ok(Snapshot {
+            source: "https://models.dev/api.json".into(),
+            fetched: fetched.into(),
+            providers,
+        })
     }
 }
 
@@ -103,13 +107,18 @@ pub const SNAPSHOT_FILE: &str = "models.snapshot.json";
 
 impl Catalog {
     pub fn new(snapshot: Snapshot) -> Self {
-        Self { snapshot: RwLock::new(snapshot), live: RwLock::new(HashMap::new()) }
+        Self {
+            snapshot: RwLock::new(snapshot),
+            live: RwLock::new(HashMap::new()),
+        }
     }
 
     /// A refreshed snapshot in the data dir wins over the bundled one.
     pub fn load(bundled: &Path, data_dir: &Path) -> Self {
         let read = |p: &Path| -> Option<Snapshot> { serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok() };
-        let snap = read(&data_dir.join(SNAPSHOT_FILE)).or_else(|| read(bundled)).unwrap_or_default();
+        let snap = read(&data_dir.join(SNAPSHOT_FILE))
+            .or_else(|| read(bundled))
+            .unwrap_or_default();
         Self::new(snap)
     }
 
@@ -140,14 +149,23 @@ impl Catalog {
             .unwrap_or(&empty);
         let local = preset.free_tier == FreeTier::Local;
         let entry = |id: &str, info: Option<&ModelInfo>, s: Option<&SnapModel>| {
-            let price_in = info.and_then(|i| i.price_in).or(s.and_then(|s| s.price_in)).or(local.then_some(0.0));
-            let price_out = info.and_then(|i| i.price_out).or(s.and_then(|s| s.price_out)).or(local.then_some(0.0));
+            let price_in = info
+                .and_then(|i| i.price_in)
+                .or(s.and_then(|s| s.price_in))
+                .or(local.then_some(0.0));
+            let price_out = info
+                .and_then(|i| i.price_out)
+                .or(s.and_then(|s| s.price_out))
+                .or(local.then_some(0.0));
             let pricing_known = price_in.is_some() && price_out.is_some();
             let zero = pricing_known && price_in == Some(0.0) && price_out == Some(0.0);
             ModelEntry {
                 provider_id: preset.id.clone(),
                 id: id.to_string(),
-                name: info.and_then(|i| i.name.clone()).or(s.map(|s| s.name.clone())).unwrap_or_else(|| id.to_string()),
+                name: info
+                    .and_then(|i| i.name.clone())
+                    .or(s.map(|s| s.name.clone()))
+                    .unwrap_or_else(|| id.to_string()),
                 price_in,
                 price_out,
                 pricing_known,
@@ -161,7 +179,10 @@ impl Catalog {
             }
         };
         match self.live.read().unwrap().get(&preset.id) {
-            Some(live) => live.iter().map(|m| entry(&m.id, Some(m), snap_models.get(&m.id))).collect(),
+            Some(live) => live
+                .iter()
+                .map(|m| entry(&m.id, Some(m), snap_models.get(&m.id)))
+                .collect(),
             None => snap_models.iter().map(|(id, s)| entry(id, None, Some(s))).collect(),
         }
     }
@@ -186,12 +207,46 @@ mod tests {
 
     fn snap() -> Snapshot {
         let mut models = BTreeMap::new();
-        models.insert("a".into(), SnapModel { name: "A".into(), price_in: Some(1.0), price_out: Some(2.0), context: Some(8000), tools: true, ..Default::default() });
-        models.insert("free-one".into(), SnapModel { name: "F".into(), price_in: Some(0.0), price_out: Some(0.0), ..Default::default() });
-        models.insert("only-snap".into(), SnapModel { name: "S".into(), ..Default::default() });
+        models.insert(
+            "a".into(),
+            SnapModel {
+                name: "A".into(),
+                price_in: Some(1.0),
+                price_out: Some(2.0),
+                context: Some(8000),
+                tools: true,
+                ..Default::default()
+            },
+        );
+        models.insert(
+            "free-one".into(),
+            SnapModel {
+                name: "F".into(),
+                price_in: Some(0.0),
+                price_out: Some(0.0),
+                ..Default::default()
+            },
+        );
+        models.insert(
+            "only-snap".into(),
+            SnapModel {
+                name: "S".into(),
+                ..Default::default()
+            },
+        );
         let mut providers = HashMap::new();
-        providers.insert("or".into(), SnapProvider { name: "OR".into(), models });
-        Snapshot { source: "x".into(), fetched: "2026-11-20".into(), providers }
+        providers.insert(
+            "or".into(),
+            SnapProvider {
+                name: "OR".into(),
+                models,
+            },
+        );
+        Snapshot {
+            source: "x".into(),
+            fetched: "2026-11-20".into(),
+            providers,
+        }
     }
 
     #[test]
@@ -205,10 +260,21 @@ mod tests {
     #[test]
     fn merge_precedence_live_wins() {
         let c = Catalog::new(snap());
-        c.set_live("or", vec![
-            ModelInfo { id: "a".into(), price_in: Some(0.5), context: None, ..Default::default() },
-            ModelInfo { id: "brand-new".into(), ..Default::default() },
-        ]);
+        c.set_live(
+            "or",
+            vec![
+                ModelInfo {
+                    id: "a".into(),
+                    price_in: Some(0.5),
+                    context: None,
+                    ..Default::default()
+                },
+                ModelInfo {
+                    id: "brand-new".into(),
+                    ..Default::default()
+                },
+            ],
+        );
         let m = c.models(&preset(""));
         assert_eq!(m.len(), 2, "live list replaces the snapshot list");
         let a = m.iter().find(|e| e.id == "a").unwrap();
@@ -226,11 +292,23 @@ mod tests {
     fn free_detection() {
         let c = Catalog::new(snap());
         let p = preset(r#","quirks":{"model_id":{"free_suffix":":free"}}"#);
-        c.set_live("or", vec![
-            ModelInfo { id: "free-one".into(), ..Default::default() },
-            ModelInfo { id: "x:free".into(), ..Default::default() },
-            ModelInfo { id: "a".into(), ..Default::default() },
-        ]);
+        c.set_live(
+            "or",
+            vec![
+                ModelInfo {
+                    id: "free-one".into(),
+                    ..Default::default()
+                },
+                ModelInfo {
+                    id: "x:free".into(),
+                    ..Default::default()
+                },
+                ModelInfo {
+                    id: "a".into(),
+                    ..Default::default()
+                },
+            ],
+        );
         let m = c.models(&p);
         let free = |id: &str| m.iter().find(|e| e.id == id).unwrap().free;
         assert!(free("free-one"), "price_in == 0 && price_out == 0");
@@ -243,7 +321,13 @@ mod tests {
         let c = Catalog::new(Snapshot::default());
         let mut p = preset("");
         p.free_tier = FreeTier::Local;
-        c.set_live("or", vec![ModelInfo { id: "llama3".into(), ..Default::default() }]);
+        c.set_live(
+            "or",
+            vec![ModelInfo {
+                id: "llama3".into(),
+                ..Default::default()
+            }],
+        );
         let m = c.models(&p);
         assert!(m[0].free && m[0].pricing_known);
     }
@@ -258,7 +342,9 @@ mod tests {
         assert_eq!(m.context, Some(4096));
         assert!(Snapshot::from_models_dev(&serde_json::json!({}), "x").is_err());
 
-        let bundled = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join(SNAPSHOT_FILE);
+        let bundled = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(SNAPSHOT_FILE);
         let c = Catalog::load(&bundled, Path::new("does-not-exist"));
         assert!(!c.snapshot_date().is_empty(), "bundled snapshot loads");
     }

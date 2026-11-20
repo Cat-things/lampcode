@@ -44,11 +44,7 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             Whole,
         ),
         rule("anthropic", r"\bsk-ant-[A-Za-z0-9_-]{20,}", Whole),
-        rule(
-            "openai",
-            r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}",
-            Whole,
-        ),
+        rule("openai", r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}", Whole),
         rule("groq", r"\bgsk_[A-Za-z0-9]{20,}", Whole),
         rule("nvidia", r"\bnvapi-[A-Za-z0-9_-]{20,}", Whole),
         rule("google", r"\bAIza[0-9A-Za-z_-]{35}", Whole),
@@ -59,11 +55,7 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         ),
         rule("xai", r"\bxai-[A-Za-z0-9]{20,}", Whole),
         rule("aws", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b", Whole),
-        rule(
-            "bearer",
-            r"(?i)\b(bearer\s+)([A-Za-z0-9._~+/-]{16,}=*)",
-            Group(2),
-        ),
+        rule("bearer", r"(?i)\b(bearer\s+)([A-Za-z0-9._~+/-]{16,}=*)", Group(2)),
         // Generic: 32+ chars of hex/base64-ish right after a key/token/secret word.
         rule(
             "secret",
@@ -219,7 +211,11 @@ mod tests {
     #[test]
     fn jwt() {
         let jwt = [
-            "ey", "JhbGciOiJIUzI1NiJ9", ".", "eyJzdWIiOiIxMjM0NTY3ODkwIn0", ".",
+            "ey",
+            "JhbGciOiJIUzI1NiJ9",
+            ".",
+            "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+            ".",
             "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
         ]
         .concat();
@@ -254,8 +250,10 @@ mod tests {
     #[test]
     fn private_key_block() {
         let block = [
-            "-----BEGIN ", "OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n",
-            "-----END ", "OPENSSH PRIVATE KEY-----",
+            "-----BEGIN ",
+            "OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n",
+            "-----END ",
+            "OPENSSH PRIVATE KEY-----",
         ]
         .concat();
         assert_redacted(&block, "private-key");

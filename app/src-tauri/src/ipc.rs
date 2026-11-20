@@ -51,7 +51,11 @@ pub struct AppInfo {
 fn app_info<R: Runtime>(app: AppHandle<R>) -> Result<AppInfo, String> {
     let info = app.package_info();
     let data_dir = app.path().app_data_dir().map_err(ui_err)?;
-    Ok(AppInfo { name: info.name.clone(), version: info.version.to_string(), data_dir: data_dir.display().to_string() })
+    Ok(AppInfo {
+        name: info.name.clone(),
+        version: info.version.to_string(),
+        data_dir: data_dir.display().to_string(),
+    })
 }
 
 async fn refresh_allowlist(hub: &Hub, keys: &KeyStore, db: &Db) {
@@ -82,7 +86,12 @@ async fn key_set(
 
 #[tauri::command]
 #[specta::specta]
-async fn key_delete(keys: State<'_, KeyStore>, hub: State<'_, Hub>, db: State<'_, Db>, provider_id: String) -> Result<(), String> {
+async fn key_delete(
+    keys: State<'_, KeyStore>,
+    hub: State<'_, Hub>,
+    db: State<'_, Db>,
+    provider_id: String,
+) -> Result<(), String> {
     keys.delete(&provider_id).map_err(ui_err)?;
     refresh_allowlist(&hub, &keys, &db).await;
     Ok(())
@@ -98,7 +107,12 @@ fn key_preview(keys: State<'_, KeyStore>, provider_id: String) -> Result<Option<
 /// The passphrase stays in memory until the app quits.
 #[tauri::command]
 #[specta::specta]
-async fn age_unlock(keys: State<'_, KeyStore>, hub: State<'_, Hub>, db: State<'_, Db>, passphrase: String) -> Result<(), String> {
+async fn age_unlock(
+    keys: State<'_, KeyStore>,
+    hub: State<'_, Hub>,
+    db: State<'_, Db>,
+    passphrase: String,
+) -> Result<(), String> {
     if passphrase.is_empty() {
         return Err("The passphrase is empty.".into());
     }
@@ -127,7 +141,12 @@ async fn settings_get(db: State<'_, Db>) -> Result<Settings, String> {
 
 #[tauri::command]
 #[specta::specta]
-async fn settings_set(db: State<'_, Db>, hub: State<'_, Hub>, keys: State<'_, KeyStore>, settings: Settings) -> Result<(), String> {
+async fn settings_set(
+    db: State<'_, Db>,
+    hub: State<'_, Hub>,
+    keys: State<'_, KeyStore>,
+    settings: Settings,
+) -> Result<(), String> {
     db.set_settings(&settings).await.map_err(ui_err)?;
     hub.refresh_allowlist(&keys, &settings.disabled_providers);
     Ok(())
@@ -146,11 +165,19 @@ pub struct ProvidersState {
 
 #[tauri::command]
 #[specta::specta]
-async fn providers_list(hub: State<'_, Hub>, keys: State<'_, KeyStore>, db: State<'_, Db>) -> Result<ProvidersState, String> {
+async fn providers_list(
+    hub: State<'_, Hub>,
+    keys: State<'_, KeyStore>,
+    db: State<'_, Db>,
+) -> Result<ProvidersState, String> {
     let disabled = db.settings().await.map_err(ui_err)?.disabled_providers;
     let providers = hub.views(&keys, &disabled);
     let age_locked = providers.iter().any(|p| matches!(p.key, KeyState::Locked));
-    Ok(ProvidersState { providers, warnings: hub.warnings(), age_locked })
+    Ok(ProvidersState {
+        providers,
+        warnings: hub.warnings(),
+        age_locked,
+    })
 }
 
 /// Models for one provider: the live list if it was fetched, else the snapshot.
@@ -164,7 +191,11 @@ fn models_list(hub: State<'_, Hub>, provider_id: String) -> Result<Vec<ModelEntr
 /// Fetch the provider's live `/models` list.
 #[tauri::command]
 #[specta::specta]
-async fn models_refresh(hub: State<'_, Hub>, keys: State<'_, KeyStore>, provider_id: String) -> Result<Vec<ModelEntry>, String> {
+async fn models_refresh(
+    hub: State<'_, Hub>,
+    keys: State<'_, KeyStore>,
+    provider_id: String,
+) -> Result<Vec<ModelEntry>, String> {
     let provider = hub.provider(&provider_id, &keys).map_err(provider_err)?;
     let live = provider.list_models().await.map_err(provider_err)?;
     hub.catalog.set_live(&provider_id, live);
@@ -188,7 +219,10 @@ async fn catalog_refresh<R: Runtime>(app: AppHandle<R>, hub: State<'_, Hub>) -> 
         .client()
         .request_once_to(reqwest::Method::GET, "https://models.dev/api.json", "models.dev")
         .map_err(ui_err)?;
-    let resp = rb.send().await.map_err(|e| provider_err(ProviderError::from_reqwest(e)))?;
+    let resp = rb
+        .send()
+        .await
+        .map_err(|e| provider_err(ProviderError::from_reqwest(e)))?;
     if !resp.status().is_success() {
         return Err(format!("models.dev returned {}", resp.status()));
     }
@@ -242,7 +276,11 @@ pub struct NetworkStatus {
 fn network_status(hub: State<'_, Hub>) -> NetworkStatus {
     let list = hub.client().allowlist();
     NetworkStatus {
-        allowed: list.entries().into_iter().map(|(host, reason)| AllowedHost { host, reason }).collect(),
+        allowed: list
+            .entries()
+            .into_iter()
+            .map(|(host, reason)| AllowedHost { host, reason })
+            .collect(),
         blocked: list.blocked(),
     }
 }
@@ -261,12 +299,20 @@ async fn projects_list(db: State<'_, Db>) -> Result<Vec<Project>, String> {
 async fn project_pick<R: Runtime>(app: AppHandle<R>, db: State<'_, Db>) -> Result<Option<Project>, String> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Open a project folder").pick_folder(move |f| {
-        let _ = tx.send(f);
-    });
-    let Some(folder) = rx.await.map_err(ui_err)? else { return Ok(None) };
+    app.dialog()
+        .file()
+        .set_title("Open a project folder")
+        .pick_folder(move |f| {
+            let _ = tx.send(f);
+        });
+    let Some(folder) = rx.await.map_err(ui_err)? else {
+        return Ok(None);
+    };
     let path = folder.into_path().map_err(ui_err)?;
-    db.upsert_project(&path.display().to_string()).await.map(Some).map_err(ui_err)
+    db.upsert_project(&path.display().to_string())
+        .await
+        .map(Some)
+        .map_err(ui_err)
 }
 
 #[tauri::command]
@@ -283,8 +329,14 @@ async fn sessions_list(db: State<'_, Db>) -> Result<Vec<SessionSummary>, String>
 
 #[tauri::command]
 #[specta::specta]
-async fn session_create(db: State<'_, Db>, project_id: Option<String>, model: Option<ModelRef>) -> Result<SessionSummary, String> {
-    db.create_session(project_id.as_deref(), model.as_ref()).await.map_err(ui_err)
+async fn session_create(
+    db: State<'_, Db>,
+    project_id: Option<String>,
+    model: Option<ModelRef>,
+) -> Result<SessionSummary, String> {
+    db.create_session(project_id.as_deref(), model.as_ref())
+        .await
+        .map_err(ui_err)
 }
 
 #[tauri::command]
@@ -337,7 +389,11 @@ async fn chat_send(
     }
     let provider = hub.provider(&model.provider_id, &keys).map_err(provider_err)?;
     let prices = hub.preset(&model.provider_id).and_then(|p| {
-        hub.catalog.models(&p).into_iter().find(|m| m.id == model.model_id).and_then(|m| m.price_in.zip(m.price_out))
+        hub.catalog
+            .models(&p)
+            .into_iter()
+            .find(|m| m.id == model.model_id)
+            .and_then(|m| m.price_in.zip(m.price_out))
     });
     let cancel = CancellationToken::new();
     {
@@ -359,7 +415,15 @@ async fn chat_send(
         }
         let _ = on_event.send(ev);
     };
-    let input = TurnInput { db: &db, provider: provider.as_ref(), model, session_id: &session_id, user_text: text, prices, cancel };
+    let input = TurnInput {
+        db: &db,
+        provider: provider.as_ref(),
+        model,
+        session_id: &session_id,
+        user_text: text,
+        prices,
+        cancel,
+    };
     // Failures were already sent as an `Error` event.
     let _ = run_turn(input, &emit).await;
     turns.0.lock().unwrap().remove(&session_id);
@@ -446,7 +510,12 @@ mod tests {
         export_to(&tmp);
         let fresh = normalize(&std::fs::read_to_string(&tmp).unwrap());
         let _ = std::fs::remove_file(&tmp);
-        let on_disk = std::fs::read_to_string(committed()).map(|s| normalize(&s)).unwrap_or_default();
-        assert!(fresh == on_disk, "app/src/ipc/bindings.ts is stale or missing; run `pnpm gen:ipc` and commit it");
+        let on_disk = std::fs::read_to_string(committed())
+            .map(|s| normalize(&s))
+            .unwrap_or_default();
+        assert!(
+            fresh == on_disk,
+            "app/src/ipc/bindings.ts is stale or missing; run `pnpm gen:ipc` and commit it"
+        );
     }
 }

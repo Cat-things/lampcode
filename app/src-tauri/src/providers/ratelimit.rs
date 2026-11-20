@@ -31,15 +31,25 @@ impl RateLimitInfo {
             (Some(r), Some(l)) if l > 0 => Some((r as f64 / l as f64).clamp(0.0, 1.0)),
             _ => None,
         };
-        [frac(self.requests_remaining, self.requests_limit), frac(self.tokens_remaining, self.tokens_limit)]
-            .into_iter()
-            .flatten()
-            .reduce(f64::min)
+        [
+            frac(self.requests_remaining, self.requests_limit),
+            frac(self.tokens_remaining, self.tokens_limit),
+        ]
+        .into_iter()
+        .flatten()
+        .reduce(f64::min)
     }
 }
 
 fn num(h: &HeaderMap, name: &str) -> Option<u64> {
-    h.get(name)?.to_str().ok()?.trim().parse::<f64>().ok().filter(|v| *v >= 0.0).map(|v| v as u64)
+    h.get(name)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| *v >= 0.0)
+        .map(|v| v as u64)
 }
 
 /// Durations like `1m30s`, `6.5s`, `250ms`, a bare number of seconds, or an
@@ -131,7 +141,10 @@ mod tests {
     fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
         let mut h = HeaderMap::new();
         for (k, v) in pairs {
-            h.insert(HeaderName::from_bytes(k.as_bytes()).unwrap(), HeaderValue::from_str(v).unwrap());
+            h.insert(
+                HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                HeaderValue::from_str(v).unwrap(),
+            );
         }
         h
     }
@@ -153,7 +166,10 @@ mod tests {
 
     #[test]
     fn anthropic_style() {
-        let h = headers(&[("anthropic-ratelimit-requests-limit", "50"), ("anthropic-ratelimit-requests-remaining", "49")]);
+        let h = headers(&[
+            ("anthropic-ratelimit-requests-limit", "50"),
+            ("anthropic-ratelimit-requests-remaining", "49"),
+        ]);
         let info = parse(RateLimitHeaders::Anthropic, &h);
         assert_eq!(info.requests_limit, Some(50));
         assert_eq!(info.headroom(), Some(0.98));

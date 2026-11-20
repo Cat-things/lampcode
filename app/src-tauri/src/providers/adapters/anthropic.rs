@@ -44,7 +44,9 @@ pub fn build_body(req: &ChatRequest, q: &Quirks) -> Value {
                 match messages.last_mut() {
                     Some(last)
                         if last["role"] == "user"
-                            && last["content"].as_array().is_some_and(|a| a.iter().all(|b| b["type"] == "tool_result")) =>
+                            && last["content"]
+                                .as_array()
+                                .is_some_and(|a| a.iter().all(|b| b["type"] == "tool_result")) =>
                     {
                         last["content"].as_array_mut().unwrap().push(block)
                     }
@@ -96,7 +98,11 @@ impl StreamState for AnthropicStream {
         }
         let v: Value =
             serde_json::from_str(&ev.data).map_err(|e| ProviderError::Other(format!("bad stream chunk: {e}")))?;
-        let kind = v.get("type").and_then(Value::as_str).or(ev.event.as_deref()).unwrap_or("");
+        let kind = v
+            .get("type")
+            .and_then(Value::as_str)
+            .or(ev.event.as_deref())
+            .unwrap_or("");
         let n = |p: &str| v.pointer(p).and_then(Value::as_u64).map(|x| x as u32);
         let mut out = Vec::new();
         match kind {
@@ -154,7 +160,10 @@ impl StreamState for AnthropicStream {
             }
             "error" => {
                 let t = v.pointer("/error/type").and_then(Value::as_str).unwrap_or("");
-                let msg = v.pointer("/error/message").and_then(Value::as_str).unwrap_or("stream error");
+                let msg = v
+                    .pointer("/error/message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("stream error");
                 let status = match t {
                     "overloaded_error" => 529,
                     "rate_limit_error" => 429,
@@ -210,16 +219,31 @@ impl Provider for Anthropic {
         let e = &self.0;
         e.require_key()?;
         let body = build_body(&req, &e.preset.quirks);
-        let rb = e.client.request(reqwest::Method::POST, &e.url("v1/messages")).map(|r| r.headers(self.headers()).json(&body));
+        let rb = e
+            .client
+            .request(reqwest::Method::POST, &e.url("v1/messages"))
+            .map(|r| r.headers(self.headers()).json(&body));
         let (resp, info) = send(e, rb, &cancel).await?;
-        let first = if info.is_empty() { vec![] } else { vec![ChatEvent::RateLimit(info)] };
-        Ok(drive(sse_events(resp.bytes_stream()), AnthropicStream::default(), first, cancel))
+        let first = if info.is_empty() {
+            vec![]
+        } else {
+            vec![ChatEvent::RateLimit(info)]
+        };
+        Ok(drive(
+            sse_events(resp.bytes_stream()),
+            AnthropicStream::default(),
+            first,
+            cancel,
+        ))
     }
 
     async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         let e = &self.0;
         e.require_key()?;
-        let rb = e.client.request(reqwest::Method::GET, &e.url("v1/models?limit=1000")).map(|r| r.headers(self.headers()));
+        let rb = e
+            .client
+            .request(reqwest::Method::GET, &e.url("v1/models?limit=1000"))
+            .map(|r| r.headers(self.headers()));
         let (resp, _) = send(e, rb, &CancellationToken::new()).await?;
         let v: Value = resp.json().await.map_err(ProviderError::from_reqwest)?;
         Ok(v["data"]
@@ -245,7 +269,10 @@ mod tests {
     use crate::providers::{ChatMessage, ToolCall, ToolSpec};
 
     fn ev(data: &str) -> SseEvent {
-        SseEvent { event: None, data: data.into() }
+        SseEvent {
+            event: None,
+            data: data.into(),
+        }
     }
 
     #[test]
@@ -253,7 +280,11 @@ mod tests {
         let req = ChatRequest {
             model: "claude".into(),
             system: Some("sys".into()),
-            messages: vec![ChatMessage::user("one"), ChatMessage::assistant("two"), ChatMessage::user("three")],
+            messages: vec![
+                ChatMessage::user("one"),
+                ChatMessage::assistant("two"),
+                ChatMessage::user("three"),
+            ],
             ..Default::default()
         };
         let b = build_body(&req, &Quirks::default());
@@ -271,15 +302,27 @@ mod tests {
                 ChatMessage::user("list"),
                 ChatMessage {
                     tool_calls: vec![
-                        ToolCall { id: "tu_1".into(), name: "ls".into(), arguments: r#"{"path":"."}"#.into() },
-                        ToolCall { id: "tu_2".into(), name: "ls".into(), arguments: r#"{"path":"src"}"#.into() },
+                        ToolCall {
+                            id: "tu_1".into(),
+                            name: "ls".into(),
+                            arguments: r#"{"path":"."}"#.into(),
+                        },
+                        ToolCall {
+                            id: "tu_2".into(),
+                            name: "ls".into(),
+                            arguments: r#"{"path":"src"}"#.into(),
+                        },
                     ],
                     ..ChatMessage::assistant("")
                 },
                 ChatMessage::tool_result("tu_1", "a"),
                 ChatMessage::tool_result("tu_2", "b"),
             ],
-            tools: vec![ToolSpec { name: "ls".into(), description: "d".into(), parameters: json!({"type":"object"}) }],
+            tools: vec![ToolSpec {
+                name: "ls".into(),
+                description: "d".into(),
+                parameters: json!({"type":"object"}),
+            }],
             ..Default::default()
         };
         let b = build_body(&req, &Quirks::default());
@@ -319,22 +362,49 @@ mod tests {
         }
         assert!(out.contains(&ChatEvent::ReasoningDelta("plan".into())));
         assert!(out.contains(&ChatEvent::TextDelta("Sure".into())));
-        assert!(out.contains(&ChatEvent::ToolCallDelta { index: 2, id: Some("tu_1".into()), name: Some("ls".into()), args_delta: "".into() }));
-        assert!(out.contains(&ChatEvent::Usage(Usage { input: 20, output: 9, cached: 5, cost: None })));
-        assert_eq!(out.last(), Some(&ChatEvent::Done { stop_reason: "tool_calls".into() }));
+        assert!(out.contains(&ChatEvent::ToolCallDelta {
+            index: 2,
+            id: Some("tu_1".into()),
+            name: Some("ls".into()),
+            args_delta: "".into()
+        }));
+        assert!(out.contains(&ChatEvent::Usage(Usage {
+            input: 20,
+            output: 9,
+            cached: 5,
+            cost: None
+        })));
+        assert_eq!(
+            out.last(),
+            Some(&ChatEvent::Done {
+                stop_reason: "tool_calls".into()
+            })
+        );
     }
 
     #[test]
     fn error_event_maps_status() {
         let mut s = AnthropicStream::default();
-        let e = s.on_item(ev(r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)).unwrap_err();
+        let e = s
+            .on_item(ev(
+                r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#,
+            ))
+            .unwrap_err();
         assert!(matches!(e, ProviderError::Server { status: 529, .. }));
     }
 
     #[test]
     fn eof_without_message_stop() {
         let mut s = AnthropicStream::default();
-        s.on_item(ev(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#)).unwrap();
-        assert_eq!(s.on_eof(), vec![ChatEvent::Done { stop_reason: "eof".into() }]);
+        s.on_item(ev(
+            r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x"}}"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            s.on_eof(),
+            vec![ChatEvent::Done {
+                stop_reason: "eof".into()
+            }]
+        );
     }
 }

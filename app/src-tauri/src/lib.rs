@@ -34,7 +34,9 @@ pub fn run() {
             let catalog = Catalog::load(&resources.join(providers::catalog::SNAPSHOT_FILE), &data_dir);
             let hub = Hub::new(registry, catalog, Allowlist::new());
             hub.register_env_vars(&keys);
-            let disabled = tauri::async_runtime::block_on(db.settings()).map(|s| s.disabled_providers).unwrap_or_default();
+            let disabled = tauri::async_runtime::block_on(db.settings())
+                .map(|s| s.disabled_providers)
+                .unwrap_or_default();
             hub.refresh_allowlist(&keys, &disabled);
             app.manage(db);
             app.manage(keys);

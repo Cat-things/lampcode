@@ -58,7 +58,12 @@ pub struct Hub {
 
 impl Hub {
     pub fn new(registry: PresetRegistry, catalog: Catalog, allowlist: Arc<Allowlist>) -> Self {
-        Self { registry: RwLock::new(registry), catalog, client: GuardedClient::new(allowlist), ratelimits: Mutex::new(HashMap::new()) }
+        Self {
+            registry: RwLock::new(registry),
+            catalog,
+            client: GuardedClient::new(allowlist),
+            ratelimits: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn client(&self) -> &GuardedClient {
@@ -135,20 +140,29 @@ impl Hub {
     }
 
     pub fn endpoint(&self, id: &str, keys: &KeyStore) -> Result<Endpoint, ProviderError> {
-        let preset = self.preset(id).ok_or_else(|| ProviderError::Other(format!("unknown provider {id:?}")))?;
+        let preset = self
+            .preset(id)
+            .ok_or_else(|| ProviderError::Other(format!("unknown provider {id:?}")))?;
         let key = if preset.key_required {
             match keys.get(id) {
                 Ok(Some(k)) => Some(Arc::new(k)),
                 Ok(None) => return Err(ProviderError::NoKey(preset.name.clone())),
                 Err(KeyError::Locked) => {
-                    return Err(ProviderError::Other("unlock the encrypted key file first (Providers page)".into()));
+                    return Err(ProviderError::Other(
+                        "unlock the encrypted key file first (Providers page)".into(),
+                    ));
                 }
                 Err(e) => return Err(ProviderError::Other(e.to_string())),
             }
         } else {
             keys.get(id).ok().flatten().map(Arc::new)
         };
-        Ok(Endpoint { base_url: preset.base_url.clone(), preset: Arc::new(preset), key, client: self.client.clone() })
+        Ok(Endpoint {
+            base_url: preset.base_url.clone(),
+            preset: Arc::new(preset),
+            key,
+            client: self.client.clone(),
+        })
     }
 
     pub fn provider(&self, id: &str, keys: &KeyStore) -> Result<Box<dyn Provider>, ProviderError> {
@@ -187,7 +201,8 @@ mod tests {
         assert!(list.is_allowed("127.0.0.1"), "local Ollama needs no key");
         assert!(!list.is_allowed("api.groq.com"), "no key, no traffic");
 
-        keys.set("groq", SecretString::from("gsk_test_key_value_123456")).unwrap();
+        keys.set("groq", SecretString::from("gsk_test_key_value_123456"))
+            .unwrap();
         h.refresh_allowlist(&keys, &[]);
         assert!(list.is_allowed("api.groq.com"));
 

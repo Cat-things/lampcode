@@ -39,7 +39,10 @@ impl Allowlist {
     }
 
     pub fn allow(&self, host: &str, reason: &str) {
-        self.hosts.write().unwrap().insert(normalize_host(host), reason.to_string());
+        self.hosts
+            .write()
+            .unwrap()
+            .insert(normalize_host(host), reason.to_string());
     }
 
     pub fn revoke(&self, host: &str) {
@@ -60,7 +63,12 @@ impl Allowlist {
     }
 
     pub fn entries(&self) -> Vec<(String, String)> {
-        self.hosts.read().unwrap().iter().map(|(h, r)| (h.clone(), r.clone())).collect()
+        self.hosts
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(h, r)| (h.clone(), r.clone()))
+            .collect()
     }
 
     pub fn record_block(&self, host: &str, reason: &str) {
@@ -70,7 +78,11 @@ impl Allowlist {
         if q.len() >= BLOCKED_KEEP {
             q.pop_front();
         }
-        q.push_back(BlockedAttempt { host, reason: reason.into(), at: chrono::Utc::now().timestamp() });
+        q.push_back(BlockedAttempt {
+            host,
+            reason: reason.into(),
+            at: chrono::Utc::now().timestamp(),
+        });
     }
 
     pub fn blocked(&self) -> Vec<BlockedAttempt> {
@@ -167,9 +179,14 @@ mod tests {
         let list = Allowlist::new();
         list.allow("api.groq.com", "provider: groq");
         let c = GuardedClient::new(list.clone());
-        assert!(c.request(reqwest::Method::GET, "https://api.groq.com/openai/v1/models").is_ok());
+        assert!(
+            c.request(reqwest::Method::GET, "https://api.groq.com/openai/v1/models")
+                .is_ok()
+        );
         assert!(c.request(reqwest::Method::GET, "https://API.GROQ.COM./x").is_ok());
-        let err = c.request(reqwest::Method::GET, "https://evil.example.com/steal").unwrap_err();
+        let err = c
+            .request(reqwest::Method::GET, "https://evil.example.com/steal")
+            .unwrap_err();
         assert_eq!(err, NetError::Blocked("evil.example.com".into()));
         let blocked = list.blocked();
         assert_eq!(blocked.len(), 1);
@@ -196,7 +213,10 @@ mod tests {
     fn one_off_host_is_not_remembered() {
         let list = Allowlist::new();
         let c = GuardedClient::new(list.clone());
-        assert!(c.request_once_to(reqwest::Method::GET, "https://models.dev/api.json", "models.dev").is_ok());
+        assert!(
+            c.request_once_to(reqwest::Method::GET, "https://models.dev/api.json", "models.dev")
+                .is_ok()
+        );
         assert!(!list.is_allowed("models.dev"));
         assert!(c.request(reqwest::Method::GET, "https://models.dev/api.json").is_err());
     }
@@ -223,14 +243,21 @@ mod tests {
     #[tokio::test]
     async fn redirect_to_unlisted_host_is_blocked() {
         use axum::{Router, response::Redirect, routing::get};
-        let app = Router::new().route("/go", get(|| async { Redirect::temporary("http://localhost.invalid.test/x") }));
+        let app = Router::new().route(
+            "/go",
+            get(|| async { Redirect::temporary("http://localhost.invalid.test/x") }),
+        );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         let list = Allowlist::new();
         list.allow("127.0.0.1", "test");
         let c = GuardedClient::new(list.clone());
-        let res = c.request(reqwest::Method::GET, &format!("http://{addr}/go")).unwrap().send().await;
+        let res = c
+            .request(reqwest::Method::GET, &format!("http://{addr}/go"))
+            .unwrap()
+            .send()
+            .await;
         assert!(res.is_err());
         assert!(list.blocked().iter().any(|b| b.host == "localhost.invalid.test"));
     }
