@@ -26,4 +26,17 @@ pub enum UpdateCheck {
 pub struct Settings {
     pub theme: Theme,
     pub update_check: UpdateCheck,
+    /// Provider ids in the order the user dragged them in the rail.
+    pub provider_order: Vec<String>,
+    pub disabled_providers: Vec<String>,
+    /// Starred models as `provider_id/model_id`.
+    pub favorite_models: Vec<String>,
+    pub last_model: Option<ModelRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRef {
+    pub provider_id: String,
+    pub model_id: String,
 }

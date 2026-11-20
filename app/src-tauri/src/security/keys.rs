@@ -70,7 +70,9 @@ pub struct OsKeychain {
 
 impl OsKeychain {
     pub fn new(service: impl Into<String>) -> Self {
-        Self { service: service.into() }
+        Self {
+            service: service.into(),
+        }
     }
 }
 
@@ -89,7 +91,9 @@ impl SecretBackend for OsKeychain {
         }
     }
     fn set(&self, id: &str, value: &SecretString) -> Result<(), KeyError> {
-        self.entry(id)?.set_password(value.expose_secret()).map_err(keychain_err)
+        self.entry(id)?
+            .set_password(value.expose_secret())
+            .map_err(keychain_err)
     }
     fn delete(&self, id: &str) -> Result<(), KeyError> {
         match self.entry(id)?.delete_credential() {
@@ -113,7 +117,11 @@ impl AgeFile {
     }
 
     pub fn with_work_factor(path: PathBuf, work_factor: u8) -> Self {
-        Self { path, passphrase: Mutex::new(None), work_factor }
+        Self {
+            path,
+            passphrase: Mutex::new(None),
+            work_factor,
+        }
     }
 
     pub fn unlock(&self, passphrase: SecretString) {
@@ -141,23 +149,17 @@ impl AgeFile {
         let ciphertext = std::fs::read(&self.path).map_err(|e| KeyError::Other(e.to_string()))?;
         let mut identity = age::scrypt::Identity::new(pass);
         identity.set_max_work_factor(self.work_factor.max(18));
-        let plain = zeroize::Zeroizing::new(
-            age::decrypt(&identity, &ciphertext).map_err(|_| KeyError::BadPassphrase)?,
-        );
-        let map: BTreeMap<String, String> =
-            serde_json::from_slice(&plain).map_err(|_| KeyError::BadPassphrase)?;
+        let plain = zeroize::Zeroizing::new(age::decrypt(&identity, &ciphertext).map_err(|_| KeyError::BadPassphrase)?);
+        let map: BTreeMap<String, String> = serde_json::from_slice(&plain).map_err(|_| KeyError::BadPassphrase)?;
         Ok(Zmap(map))
     }
 
     fn save(&self, map: &Zmap) -> Result<(), KeyError> {
         let pass = self.passphrase()?;
-        let plain = zeroize::Zeroizing::new(
-            serde_json::to_vec(&map.0).map_err(|e| KeyError::Other(e.to_string()))?,
-        );
+        let plain = zeroize::Zeroizing::new(serde_json::to_vec(&map.0).map_err(|e| KeyError::Other(e.to_string()))?);
         let mut recipient = age::scrypt::Recipient::new(pass);
         recipient.set_work_factor(self.work_factor);
-        let ciphertext =
-            age::encrypt(&recipient, &plain).map_err(|e| KeyError::Other(e.to_string()))?;
+        let ciphertext = age::encrypt(&recipient, &plain).map_err(|e| KeyError::Other(e.to_string()))?;
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| KeyError::Other(e.to_string()))?;
         }
@@ -225,12 +227,18 @@ pub fn self_test(backend: &dyn SecretBackend) -> KeychainSelfTest {
         }
     };
     match run() {
-        Ok(()) => KeychainSelfTest { ok: true, message: "Keychain works: wrote, read and deleted a test value.".into() },
-        Err(e) => KeychainSelfTest { ok: false, message: e.to_string() },
+        Ok(()) => KeychainSelfTest {
+            ok: true,
+            message: "Keychain works: wrote, read and deleted a test value.".into(),
+        },
+        Err(e) => KeychainSelfTest {
+            ok: false,
+            message: e.to_string(),
+        },
     }
 }
 
-type EnvLookup =Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+type EnvLookup = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 pub struct KeyStore {
     env_lookup: EnvLookup,
@@ -273,10 +281,10 @@ impl KeyStore {
 
     fn resolve(&self, provider_id: &str) -> Result<Option<(SecretString, KeySource)>, KeyError> {
         let env_var = self.env_vars.lock().unwrap().get(provider_id).cloned();
-        if let Some(v) = env_var.and_then(|name| (self.env_lookup)(&name)) {
-            if !v.trim().is_empty() {
-                return Ok(Some((SecretString::from(v), KeySource::Env)));
-            }
+        if let Some(v) = env_var.and_then(|name| (self.env_lookup)(&name))
+            && !v.trim().is_empty()
+        {
+            return Ok(Some((SecretString::from(v), KeySource::Env)));
         }
         match self.keychain.get(provider_id) {
             Ok(Some(k)) => return Ok(Some((k, KeySource::Keychain))),
@@ -313,6 +321,39 @@ impl KeyStore {
             source,
             masked: mask(k.expose_secret()),
         }))
+    }
+}
+
+/// In-memory backends for tests (unit and integration). Nothing here ever
+/// touches disk or the OS keychain.
+#[doc(hidden)]
+pub mod tests_support {
+    use super::*;
+
+    #[derive(Default)]
+    pub struct MemoryBackend(Mutex<HashMap<String, String>>);
+
+    impl SecretBackend for MemoryBackend {
+        fn get(&self, id: &str) -> Result<Option<SecretString>, KeyError> {
+            Ok(self.0.lock().unwrap().get(id).map(|v| SecretString::from(v.clone())))
+        }
+        fn set(&self, id: &str, value: &SecretString) -> Result<(), KeyError> {
+            self.0
+                .lock()
+                .unwrap()
+                .insert(id.into(), value.expose_secret().to_string());
+            Ok(())
+        }
+        fn delete(&self, id: &str) -> Result<(), KeyError> {
+            self.0.lock().unwrap().remove(id);
+            Ok(())
+        }
+    }
+
+    /// A key store with an in-memory keychain and no env overrides.
+    pub fn memory_store() -> KeyStore {
+        let age = AgeFile::new(std::env::temp_dir().join("lampcode-test-never-written.age"));
+        KeyStore::with_env(Box::new(MemoryBackend::default()), age, Box::new(|_| None))
     }
 }
 
@@ -378,7 +419,11 @@ mod tests {
     #[test]
     fn empty_env_var_does_not_override() {
         let dir = tempfile::tempdir().unwrap();
-        let store = KeyStore::with_env(Box::new(MemKeychain::default()), age_in(&dir), Box::new(|_| Some(String::new())));
+        let store = KeyStore::with_env(
+            Box::new(MemKeychain::default()),
+            age_in(&dir),
+            Box::new(|_| Some(String::new())),
+        );
         store.set("groq", SecretString::from(KEY)).unwrap();
         assert_eq!(store.preview("groq").unwrap().unwrap().source, KeySource::Keychain);
     }
@@ -430,7 +475,10 @@ mod tests {
         assert_eq!(store.get("groq").unwrap().unwrap().expose_secret(), KEY);
         assert_eq!(store.preview("groq").unwrap().unwrap().source, KeySource::AgeFile);
         let on_disk = std::fs::read(dir.path().join("keys.age")).unwrap();
-        assert!(!String::from_utf8_lossy(&on_disk).contains("TESTONLY"), "key written in plaintext");
+        assert!(
+            !String::from_utf8_lossy(&on_disk).contains("TESTONLY"),
+            "key written in plaintext"
+        );
     }
 
     #[test]
@@ -439,7 +487,10 @@ mod tests {
         let store = KeyStore::with_env(Box::new(NoKeychain), age_in(&dir), no_env());
         let err = store.set("groq", SecretString::from(KEY)).unwrap_err();
         assert!(matches!(err, KeyError::Locked), "{err:?}");
-        assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none(), "something was written to disk");
+        assert!(
+            std::fs::read_dir(dir.path()).unwrap().next().is_none(),
+            "something was written to disk"
+        );
     }
 
     #[test]
@@ -448,7 +499,8 @@ mod tests {
         let a = age_in(&dir);
         a.unlock(SecretString::from("right passphrase"));
         a.set("groq", &SecretString::from(KEY)).unwrap();
-        a.set("nvidia", &SecretString::from("nvapi-TESTONLY-0000000000000000000")).unwrap();
+        a.set("nvidia", &SecretString::from("nvapi-TESTONLY-0000000000000000000"))
+            .unwrap();
 
         let b = age_in(&dir);
         b.unlock(SecretString::from("right passphrase"));

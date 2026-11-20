@@ -1,0 +1,21 @@
+{
+  "id": "gemini",
+  "name": "Google Gemini",
+  "icon": "gemini",
+  "protocol": "openai_chat",
+  "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "key_env": "GEMINI_API_KEY",
+  "signup_url": "https://aistudio.google.com/apikey",
+  "docs_url": "https://aistudio.google.com/docs/openai",
+  "checked": "2026-11-20",
+  "free_tier": "free_tier",
+  "free_tier_note": "Free usage tier for active projects, with per-model limits on the rate-limits page. Some models are paid only.",
+  "region": "US",
+  "tags": ["free"],
+  "catalog_id": "google",
+  "quirks": {
+    "stream_usage": true,
+    "ratelimit_headers": "none",
+    "images": "native"
+  }
+}

@@ -93,6 +93,18 @@ lampcode/
 - **Windows sandbox for custom tools**: Job Object (kill-on-close, no breakaway, memory + CPU caps) via the `windows` crate. Honestly labeled "restricted, not sandboxed" since it doesn't limit fs/network.
 - **Website deploy**: GitHub Pages via Actions; custom domain in `website/site.config.ts`.
 
+### Milestone 2 rulings (2026-11-20)
+- **Gemini runs on its documented OpenAI-compatible endpoint** (`/v1beta/openai`). The docs now call `generateContent` legacy and point at a new Interactions API, so the native Gemini adapter moves to Task 2.7 and targets that API.
+- **Anthropic `anthropic-version` = `2023-06-01`** (still listed in the version history). The newest version (`2026-10-21`) rejects `temperature`; switching is a one-line quirk change per preset.
+- **Model output links never navigate** the app window and images never load; the URL is shown as text. Raw HTML in model output is not rendered.
+- **"Fastest" sort uses speeds measured on this machine** (output tokens/sec of past turns, kept in localStorage per model id). No provider publishes comparable numbers.
+- **The MCP/Skills rail item arrives with Milestone 7.** No empty placeholder pages (same rule as the Settings page).
+- **Allowlist = hosts of configured, enabled providers.** A provider with no key gets no traffic; local Ollama (no key) is allowed on 127.0.0.1. Redirects to other hosts are refused.
+- **64-bit integers cross IPC as `number`** (millis and counters stay far below 2^53).
+- **Folder picker runs in Rust** (`tauri-plugin-dialog`), so the frontend gets no dialog or filesystem permissions.
+- **Local rustfmt/clippy**: the official 1.99.1 components from static.rust-lang.org (sha256 checked) are used from a scratch folder; `rustfmt.toml` sets `max_width = 120`.
+- **UI preview**: `app/preview/` renders the app with a fake backend for visual checks (`pnpm dev`, open `/preview/`). Not part of the build.
+
 ---
 
 ## Milestone 1: Skeleton
@@ -143,39 +155,39 @@ lampcode/
 ## Milestone 2: Providers (core) + plain chat
 
 ### Task 2.1: Preset schema, quirks, loader
-**Files:** `providers/preset.rs`, `providers/quirks.rs`, `resources/providers/*.json` (first batch: OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, Ollama, IteraCompute), `resources/providers.schema.json`.
+**Files:** `providers/preset.rs`, `providers/quirks.rs`, `resources/providers/*.json` (first batch: OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, Ollama, IteraCompute). `providers.schema.json` moved to Task 2.6, next to `scripts/build-providers.ts` that consumes it.
 **Produces:** `Preset { id, name, icon, protocol: Protocol, base_url, key_env: Option<String>, signup_url, docs_url, checked: NaiveDate, free_tier: FreeTier, region, tags: Vec<Tag /*Free,EU,Local,Router*/>, variants: Vec<Variant>, quirks: Quirks }`; `Quirks { max_tokens_field, temperature: TempRule, reasoning: ReasoningLoc, send_reasoning_back, tools: ToolSupport /*Native|NoParallel|None*/, stream_usage, cost_field, extra_headers, user_agent, ratelimit_headers, images: ImageSupport, model_id: ModelIdRule }`; `PresetRegistry::load(builtin_dir, user_dir) -> Result<Self>`.
-- [ ] Tests: every bundled preset parses, has `docs_url` and `checked`; duplicate ids → error naming both files; user pack overrides nothing built-in unless id differs (shadowing → warning).
-- [ ] Each preset in this batch verified against official docs (record URL + date).
-- [ ] Commit.
+- [x] Tests: every bundled preset parses, has `docs_url` and `checked`; duplicate ids → error naming both files; user pack overrides nothing built-in unless id differs (shadowing → warning).
+- [x] Each preset in this batch verified against official docs (record URL + date).
+- [x] Commit.
 
 ### Task 2.2: Provider trait, guarded HTTP client, SSE parser, mock server
 **Files:** `providers/mod.rs`, `providers/sse.rs`, `security/net.rs`, `tests/support/mock_openai.rs`.
 **Produces:** `trait Provider { async fn chat_stream(&self, req: ChatRequest, cancel: CancellationToken) -> Result<BoxStream<ChatEvent>>; async fn list_models(&self) -> Result<Vec<ModelInfo>>; }`; `ChatEvent { TextDelta, ReasoningDelta, ToolCallDelta{index,id,name,args_delta}, Usage{input,output,cached,cost}, RateLimit(RateLimitInfo), Done{stop_reason} }`; `GuardedClient::request(host-checked) -> reqwest::RequestBuilder` (rejects hosts not in `Allowlist`, logs blocked attempts); `ProviderError { RateLimited{retry_after}, Auth, Server(u16), Timeout, Blocked(host), Other }` with redacted Display.
-- [ ] Tests: `split_chunks_reassemble`, `stream_eof_without_done_finishes_turn`, `blocked_host_is_refused_and_logged`, `error_display_is_redacted`.
-- [ ] Mock server (axum on 127.0.0.1:0) with scriptable responses: stream text, stream tool calls, 429 with `retry-after`, 500, slow.
-- [ ] Commit.
+- [x] Tests: `split_chunks_reassemble`, `stream_eof_without_done_finishes_turn`, `blocked_host_is_refused_and_logged`, `error_display_is_redacted`.
+- [x] Mock server (axum on 127.0.0.1:0) with scriptable responses: stream text, stream tool calls, 429 with `retry-after`, 500, slow.
+- [x] Commit.
 
 ### Task 2.3: Adapters: OpenAI-compatible, Anthropic, Anthropic-compatible, Gemini, Ollama
 **Files:** `providers/adapters/{openai_chat,anthropic,gemini,ollama}.rs` (Anthropic-compatible = `anthropic.rs` with configurable base URL + quirks).
-- [ ] One test per quirk against the mock: `max_completion_tokens` field, temperature dropped/clamped, `reasoning_content` vs `reasoning` vs `<think>` extraction, `stream_options.include_usage`, `cost` field read, OpenRouter headers sent, `:free` model id kept, tool support `None` → JSON-in-text protocol round-trips.
-- [ ] Anthropic: thinking blocks, `cache_control` on system + last user turn, tool_use/tool_result mapping. Gemini: `functionCall` mapping. Ollama: `/api/chat` + `/api/tags`, `pull`/`delete` commands.
-- [ ] Commit.
+- [x] One test per quirk against the mock: `max_completion_tokens` field, temperature dropped/clamped, `reasoning_content` vs `reasoning` vs `<think>` extraction, `stream_options.include_usage`, `cost` field read, OpenRouter headers sent, `:free` model id kept, tool support `None` → JSON-in-text protocol round-trips.
+- [x] Anthropic: thinking blocks, `cache_control` on system + last user turn, tool_use/tool_result mapping. Gemini: `functionCall` mapping. Ollama: `/api/chat` + `/api/tags`, `pull`/`delete` commands.
+- [x] Commit.
 
 ### Task 2.4: Model catalog
 **Files:** `providers/catalog.rs`, `resources/models.snapshot.json` (models.dev export, dated).
 **Produces:** `Catalog::models(provider_id) -> Vec<ModelEntry { id, price_in, price_out, context, tools, vision, released, pricing_known }>` merging snapshot with live `/models` (live wins; unknown → `pricing_known=false`); command `catalog_refresh()` (manual, adds `models.dev` to allowlist only for that call, only if user enables it).
-- [ ] Tests: merge precedence, unknown-pricing marking, free detection (`price_in == 0 && price_out == 0`).
-- [ ] Commit.
+- [x] Tests: merge precedence, unknown-pricing marking, free detection (`price_in == 0 && price_out == 0`).
+- [x] Commit.
 
 ### Task 2.5: Provider rail + model picker + plain chat
 **Files:** `features/providers/Rail.tsx`, `features/models/ModelPicker.tsx`, `features/chat/{Chat,Composer,Message}.tsx`, `agent/loop.rs` (no tools yet), `storage/sessions.rs`.
-- [ ] App shell per §4: far-left rail (Home, Sessions, Providers, MCP/Skills, Settings), left sidebar with projects → nested sessions, new chat, search across sessions (SQLite FTS5), `Ctrl+K` command palette, shortcut map, focus rings, "Polishing <project>..." thinking line (static under reduced motion).
-- [ ] Rail: icons, greyed when unconfigured, click filter, drag reorder (persisted), context menu add key/edit/remove/disable.
-- [ ] Picker: search, stars, sorts (Cheapest/Fastest/Newest/Context/Favorites), FREE badge, ctx, tools/vision icons, headroom bars (unknown state), "Free only" toggle.
-- [ ] Chat: streaming markdown + syntax highlight, per-turn tokens/cost footer, messages persisted in SQLite.
-- [ ] Vitest: picker sorting + free filter. Rust integration: `plain_chat_against_mock_streams_and_persists`.
-- [ ] Manual: chat end to end with one real free model (Groq or OpenRouter `:free`). **Milestone 2 done.**
+- [x] App shell per §4: far-left rail (Home, Sessions, Providers, MCP/Skills, Settings), left sidebar with projects → nested sessions, new chat, search across sessions (SQLite FTS5), `Ctrl+K` command palette, shortcut map, focus rings, "Polishing <project>..." thinking line (static under reduced motion).
+- [x] Rail: icons, greyed when unconfigured, click filter, drag reorder (persisted), context menu add key/edit/remove/disable.
+- [x] Picker: search, stars, sorts (Cheapest/Fastest/Newest/Context/Favorites), FREE badge, ctx, tools/vision icons, headroom bars (unknown state), "Free only" toggle.
+- [x] Chat: streaming markdown + syntax highlight, per-turn tokens/cost footer, messages persisted in SQLite.
+- [x] Vitest: picker sorting + free filter. Rust integration: `plain_chat_against_mock_streams_and_persists`.
+- [x] Manual: chat end to end with one real free model. Passed 2026-11-20 via `tests/real_provider.rs` on OpenRouter `nvidia/nemotron-3.5-lightning:free` and `baidu/ernie-5.5-flash-preview:free` (model list, streaming, usage, $0 cost). Several other `:free` models returned 429 from upstream pools, which surfaced cleanly as `RateLimited`. **Milestone 2 done.**
 
 ## Milestone 2.5: Providers (everything else)
 
@@ -321,7 +333,14 @@ lampcode/
 
 ## Unverified providers
 
-Filled in during Task 2.6. Every preset from §2.2 starts here until its official docs are checked. Known only: IteraCompute `https://api.iteracompute.com/v1` (OpenAI-compatible, verified by you).
+Filled in during Task 2.6. Every preset from §2.2 starts here until its official docs are checked.
+
+Checked 2026-11-20 and shipped (Task 2.1): OpenAI, Anthropic, Google Gemini (OpenAI-compatible endpoint), Groq, OpenRouter, NVIDIA NIM, Ollama (local).
+
+Gaps found while checking:
+- **IteraCompute**: base URL `https://api.iteracompute.com/v1` confirmed by the maintainer; the docs site had an expired TLS certificate on 2026-11-20, so the env var name (`ITERACOMPUTE_API_KEY`) is ours and the free tier is marked unknown.
+- **NVIDIA NIM**: free credits and rate limits are not stated in the docs pages checked; marked unknown.
+- **Groq**: per-plan free limits weren't readable from the docs table; the preset links to the rate-limits page instead of quoting numbers.
 
 ## Out of scope / deferred
 
@@ -349,6 +368,14 @@ Every crate/npm package added gets a line. "Checked" = source grepped for postho
 | vite, @vitejs/plugin-react, typescript | 8.x / 6.x / 6.0 | yes, clean | |
 | tailwindcss, @tailwindcss/vite | 4.x | yes, clean | |
 | vitest, jsdom, @testing-library/{react,dom,user-event}, @types/node | dev | yes, clean | jsdom hit = color math |
+| reqwest (rustls, stream, json, http2) | 0.13.5 | yes, clean | TLS via rustls + aws-lc-rs (clean); rustls-platform-verifier for OS roots |
+| futures-util, async-trait, bytes, url, tokio-util | 0.3.34 / 0.1.92 / 1.12.2 / 2.5.8 / 0.7.20 | yes, clean | |
+| chrono (no default features) | 0.4.45 | yes, clean | |
+| uuid (v4) | 1.29.3 | yes, clean | |
+| tauri-plugin-dialog (+ tauri-plugin-fs, rfd) | 2.8.4 / 2.7.1 / 0.17.2 | yes, clean | used from Rust only; no JS permissions granted |
+| axum (dev) | 0.8.9 | n/a | mock provider server in tests |
+| react-markdown, remark-gfm, rehype-highlight (+ highlight.js, lowlight) | 10.1.0 / 4.0.1 / 7.0.2 | yes, clean | |
+| models.dev data snapshot | 2026-11-20 | n/a | MIT, see THIRD_PARTY_NOTICES.md |
 
 ## Skills
 

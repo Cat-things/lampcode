@@ -1,0 +1,21 @@
+{
+  "id": "groq",
+  "name": "Groq",
+  "icon": "groq",
+  "protocol": "openai_chat",
+  "base_url": "https://api.groq.com/openai/v1",
+  "key_env": "GROQ_API_KEY",
+  "signup_url": "https://console.groq.com/keys",
+  "docs_url": "https://console.groq.com/docs/openai",
+  "checked": "2026-11-20",
+  "free_tier": "free_tier",
+  "free_tier_note": "Free plan with per-model rate limits (see console.groq.com/docs/rate-limits).",
+  "region": "US",
+  "tags": ["free"],
+  "catalog_id": "groq",
+  "quirks": {
+    "max_tokens_field": "max_completion_tokens",
+    "reasoning": "auto",
+    "ratelimit_headers": "openai"
+  }
+}

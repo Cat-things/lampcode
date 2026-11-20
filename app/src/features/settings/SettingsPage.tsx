@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import type { Theme } from "../../ipc/bindings";
 import { useSettings } from "../../settings/SettingsProvider";
+import { About } from "./About";
 import { KeychainTest } from "./KeychainTest";
+import { NetworkList } from "./NetworkList";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -71,6 +73,16 @@ export function SettingsPage() {
             />
           </button>
         </div>
+      </Section>
+      <Section title="Privacy">
+        <p className="mb-3 text-ink-muted">
+          No account, no telemetry. LampCode only talks to the hosts below, derived from the providers you set up.
+        </p>
+        <NetworkList />
+      </Section>
+
+      <Section title="About">
+        <About />
       </Section>
     </div>
   );
