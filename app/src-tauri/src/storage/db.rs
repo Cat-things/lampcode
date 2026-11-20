@@ -57,6 +57,10 @@ impl Db {
         Ok(Self { pool })
     }
 
+    pub(crate) fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     pub async fn get_json<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, StorageError> {
         let raw: Option<String> = sqlx::query_scalar("SELECT json FROM settings WHERE key = ?")
             .bind(key)
@@ -101,7 +105,7 @@ impl Db {
 
 const SETTINGS_KEY: &str = "app";
 
-fn db_err(e: sqlx::Error) -> StorageError {
+pub(crate) fn db_err(e: sqlx::Error) -> StorageError {
     StorageError::Db(redact(&e.to_string()).into_owned())
 }
 
@@ -111,7 +115,7 @@ mod tests {
     use crate::storage::{Theme, UpdateCheck};
 
     async fn tables(db: &Db) -> Vec<String> {
-        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_sqlx%' ORDER BY name")
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_sqlx%' AND name NOT LIKE 'messages_fts_%' ORDER BY name")
             .fetch_all(&db.pool)
             .await
             .unwrap()
@@ -122,7 +126,7 @@ mod tests {
         let db = Db::open_in_memory().await.unwrap();
         assert_eq!(
             tables(&db).await,
-            ["allowlist_log", "messages", "projects", "sessions", "settings", "spend"]
+            ["allowlist_log", "messages", "messages_fts", "projects", "sessions", "settings", "spend"]
         );
     }
 
@@ -130,7 +134,7 @@ mod tests {
     async fn opening_a_file_twice_keeps_data() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested").join("lampcode.db");
-        let s = Settings { theme: Theme::Light, update_check: UpdateCheck::Disabled };
+        let s = Settings { theme: Theme::Light, update_check: UpdateCheck::Disabled, ..Default::default() };
         Db::open(&path).await.unwrap().set_settings(&s).await.unwrap();
         assert_eq!(Db::open(&path).await.unwrap().settings().await.unwrap(), s);
     }
@@ -146,7 +150,7 @@ mod tests {
     #[tokio::test]
     async fn settings_round_trip() {
         let db = Db::open_in_memory().await.unwrap();
-        let s = Settings { theme: Theme::System, update_check: UpdateCheck::Enabled };
+        let s = Settings { theme: Theme::System, update_check: UpdateCheck::Enabled, favorite_models: vec!["groq/llama".into()], ..Default::default() };
         db.set_settings(&s).await.unwrap();
         assert_eq!(db.settings().await.unwrap(), s);
     }

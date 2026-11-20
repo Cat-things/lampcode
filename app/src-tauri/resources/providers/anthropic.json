@@ -1,0 +1,21 @@
+{
+  "id": "anthropic",
+  "name": "Anthropic",
+  "icon": "anthropic",
+  "protocol": "anthropic",
+  "base_url": "https://api.anthropic.com",
+  "key_env": "ANTHROPIC_API_KEY",
+  "signup_url": "https://platform.claude.com/settings/keys",
+  "docs_url": "https://platform.claude.com/docs/en/api/messages",
+  "checked": "2026-11-20",
+  "free_tier": "none",
+  "free_tier_note": "Paid API. New organizations may start on a lower-limit evaluation tier.",
+  "region": "US",
+  "catalog_id": "anthropic",
+  "quirks": {
+    "reasoning": "none",
+    "ratelimit_headers": "anthropic",
+    "images": "native",
+    "anthropic_version": "2023-06-01"
+  }
+}

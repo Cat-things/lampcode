@@ -1,0 +1,21 @@
+{
+  "id": "openai",
+  "name": "OpenAI",
+  "icon": "openai",
+  "protocol": "openai_chat",
+  "base_url": "https://api.openai.com/v1",
+  "key_env": "OPENAI_API_KEY",
+  "signup_url": "https://platform.openai.com/api-keys",
+  "docs_url": "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create",
+  "checked": "2026-11-20",
+  "free_tier": "none",
+  "free_tier_note": "Paid API. The rate-limit guide lists a Free usage tier in allowed regions, but no free usage.",
+  "region": "US",
+  "catalog_id": "openai",
+  "quirks": {
+    "max_tokens_field": "max_completion_tokens",
+    "stream_usage": true,
+    "ratelimit_headers": "openai",
+    "images": "native"
+  }
+}

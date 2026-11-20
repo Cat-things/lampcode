@@ -1,0 +1,18 @@
+{
+  "id": "iteracompute",
+  "name": "IteraCompute",
+  "icon": "iteracompute",
+  "protocol": "openai_chat",
+  "base_url": "https://api.iteracompute.com/v1",
+  "key_env": "ITERACOMPUTE_API_KEY",
+  "docs_url": "https://iteracompute.com/",
+  "checked": "2026-11-20",
+  "free_tier": "unknown",
+  "free_tier_note": "Base URL confirmed working by the maintainer. The docs site was unreachable on the check date.",
+  "region": "Unknown",
+  "catalog_id": "iteracompute",
+  "quirks": {
+    "cost_field": "cost",
+    "stream_usage": true
+  }
+}

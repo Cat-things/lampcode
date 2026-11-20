@@ -1,0 +1,29 @@
+{
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "icon": "openrouter",
+  "protocol": "openai_chat",
+  "base_url": "https://openrouter.ai/api/v1",
+  "key_env": "OPENROUTER_API_KEY",
+  "signup_url": "https://openrouter.ai/settings/keys",
+  "docs_url": "https://openrouter.ai/docs/api-reference/overview",
+  "checked": "2026-11-20",
+  "free_tier": "free_models",
+  "free_tier_note": "Models ending in :free cost nothing: 20 requests/min and 50/day, or 1000/day after buying 10 credits.",
+  "region": "US",
+  "tags": ["free", "router"],
+  "variants": [
+    { "id": "eu", "name": "EU routing (Business/Enterprise)", "base_url": "https://eu.openrouter.ai/api/v1", "region": "EU" }
+  ],
+  "catalog_id": "openrouter",
+  "quirks": {
+    "reasoning": "auto",
+    "cost_field": "cost",
+    "extra_headers": {
+      "HTTP-Referer": "https://github.com/Cat-things/lampcode",
+      "X-OpenRouter-Title": "LampCode"
+    },
+    "ratelimit_headers": "simple",
+    "model_id": { "free_suffix": ":free", "vendor_prefix": true }
+  }
+}

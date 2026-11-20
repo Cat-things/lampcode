@@ -1,0 +1,20 @@
+{
+  "id": "nvidia",
+  "name": "NVIDIA NIM",
+  "icon": "nvidia",
+  "protocol": "openai_chat",
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "key_env": "NVIDIA_API_KEY",
+  "signup_url": "https://build.nvidia.com/",
+  "docs_url": "https://docs.api.nvidia.com/nim/reference/llm-apis",
+  "checked": "2026-11-20",
+  "free_tier": "unknown",
+  "free_tier_note": "Keys come with an NVIDIA Developer Program account (\"Get API Key\" on any model page). Free limits are not stated in the docs.",
+  "region": "US",
+  "catalog_id": "nvidia",
+  "quirks": {
+    "reasoning": "auto",
+    "ratelimit_headers": "none",
+    "model_id": { "vendor_prefix": true }
+  }
+}

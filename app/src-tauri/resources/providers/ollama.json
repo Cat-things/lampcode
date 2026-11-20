@@ -1,0 +1,18 @@
+{
+  "id": "ollama",
+  "name": "Ollama",
+  "icon": "ollama",
+  "protocol": "ollama",
+  "base_url": "http://127.0.0.1:11434",
+  "key_required": false,
+  "docs_url": "https://docs.ollama.com/faq",
+  "checked": "2026-11-20",
+  "free_tier": "local",
+  "free_tier_note": "Runs on your machine. Nothing leaves it.",
+  "region": "Local",
+  "tags": ["local", "free"],
+  "quirks": {
+    "reasoning": "auto",
+    "ratelimit_headers": "none"
+  }
+}

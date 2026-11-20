@@ -316,6 +316,36 @@ impl KeyStore {
     }
 }
 
+/// In-memory backends for tests (unit and integration). Nothing here ever
+/// touches disk or the OS keychain.
+#[doc(hidden)]
+pub mod tests_support {
+    use super::*;
+
+    #[derive(Default)]
+    pub struct MemoryBackend(Mutex<HashMap<String, String>>);
+
+    impl SecretBackend for MemoryBackend {
+        fn get(&self, id: &str) -> Result<Option<SecretString>, KeyError> {
+            Ok(self.0.lock().unwrap().get(id).map(|v| SecretString::from(v.clone())))
+        }
+        fn set(&self, id: &str, value: &SecretString) -> Result<(), KeyError> {
+            self.0.lock().unwrap().insert(id.into(), value.expose_secret().to_string());
+            Ok(())
+        }
+        fn delete(&self, id: &str) -> Result<(), KeyError> {
+            self.0.lock().unwrap().remove(id);
+            Ok(())
+        }
+    }
+
+    /// A key store with an in-memory keychain and no env overrides.
+    pub fn memory_store() -> KeyStore {
+        let age = AgeFile::new(std::env::temp_dir().join("lampcode-test-never-written.age"));
+        KeyStore::with_env(Box::new(MemoryBackend::default()), age, Box::new(|_| None))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
