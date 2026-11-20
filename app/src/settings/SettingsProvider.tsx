@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { commands, type Settings_Serialize as Settings, type Theme } from "../ipc/bindings";
 
 type Ctx = {
@@ -38,20 +38,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", onChange);
   }, [settings]);
 
-  const update = useCallback(
-    async (patch: Partial<Settings>) => {
-      if (!settings) return;
-      const next = { ...settings, ...patch };
-      setSettings(next);
-      try {
-        await commands.settingsSet(next);
-      } catch (e) {
-        setSettings(settings);
-        setError(String(e));
-      }
-    },
-    [settings],
-  );
+  // Latest value, so two quick updates don't overwrite each other.
+  const latest = useRef<Settings | null>(null);
+  latest.current = settings;
+
+  const update = useCallback(async (patch: Partial<Settings>) => {
+    const prev = latest.current;
+    if (!prev) return;
+    const next = { ...prev, ...patch };
+    latest.current = next;
+    setSettings(next);
+    try {
+      await commands.settingsSet(next);
+    } catch (e) {
+      // Roll back only this patch's keys, keeping later changes.
+      const rolled = { ...latest.current, ...Object.fromEntries(Object.keys(patch).map((k) => [k, prev[k as keyof Settings]])) } as Settings;
+      latest.current = rolled;
+      setSettings(rolled);
+      setError(String(e));
+    }
+  }, []);
 
   if (error && !settings) {
     return (

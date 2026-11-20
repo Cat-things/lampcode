@@ -16,6 +16,10 @@
   --beam-ink: #0d1017;
   --danger: #ff8a8a;
   --ok: #7fe0a6;
+  --code-keyword: #c3a6ff;
+  --code-string: #9be3b4;
+  --code-number: #ffc38a;
+  --code-title: #8fd3ff;
   --dur-1: 150ms;
   --dur-2: 220ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -36,6 +40,10 @@
   --beam-ink: #ffffff;
   --danger: #b42318;
   --ok: #17784a;
+  --code-keyword: #6f3fc4;
+  --code-string: #1b7a43;
+  --code-number: #9a4c00;
+  --code-title: #0a6fa3;
 }
 
 @theme inline {
@@ -83,5 +91,125 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---- chat markdown ---- */
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote {
+  margin: 0.6em 0;
+}
+.markdown ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.markdown ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.markdown h1 {
+  font-size: 1.3em;
+}
+.markdown h2 {
+  font-size: 1.15em;
+}
+.markdown blockquote {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 0.8em;
+  color: var(--ink-muted);
+}
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1em 0;
+}
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Syntax colors (highlight.js classes), tuned for both themes. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type {
+  color: var(--code-keyword);
+}
+.hljs-string,
+.hljs-attr,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol {
+  color: var(--code-number);
+}
+.hljs-title,
+.hljs-function,
+.hljs-section {
+  color: var(--code-title);
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-meta,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--ink-muted);
+}
+
+/* ---- thinking line ---- */
+.thinking-shimmer {
+  background: linear-gradient(90deg, var(--ink-faint) 0%, var(--ink) 50%, var(--ink-faint) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer 1.8s linear infinite;
+}
+.thinking-dots {
+  display: inline-block;
+  animation: thinking-dots 1.2s steps(4, end) infinite;
+  overflow: hidden;
+  vertical-align: bottom;
+  width: 1.2em;
+}
+@keyframes thinking-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@keyframes thinking-dots {
+  from {
+    width: 0;
+  }
+  to {
+    width: 1.2em;
   }
 }
