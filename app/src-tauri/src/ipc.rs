@@ -2,6 +2,7 @@
 //! registered here; `app/src/ipc/bindings.ts` is generated from this builder
 //! and must never be edited by hand.
 
+use crate::storage::{Db, Settings};
 use crate::security::keys::{self, KeyPreview, KeyStore, KeychainSelfTest, OsKeychain, SecretBackend};
 use age::secrecy::SecretString;
 use serde::Serialize;
@@ -84,6 +85,18 @@ fn keychain_self_test() -> KeychainSelfTest {
     keys::self_test(&OsKeychain::new(KEYCHAIN_SELFTEST_SERVICE))
 }
 
+#[tauri::command]
+#[specta::specta]
+async fn settings_get(db: State<'_, Db>) -> Result<Settings, String> {
+    db.settings().await.map_err(ui_err)
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn settings_set(db: State<'_, Db>, settings: Settings) -> Result<(), String> {
+    db.set_settings(&settings).await.map_err(ui_err)
+}
+
 pub const KEYCHAIN_SERVICE: &str = "LampCode";
 const KEYCHAIN_SELFTEST_SERVICE: &str = "LampCode-selftest";
 
@@ -95,6 +108,8 @@ pub fn builder() -> Builder<Wry> {
         key_preview,
         age_unlock,
         keychain_self_test,
+        settings_get,
+        settings_set,
     ])
 }
 

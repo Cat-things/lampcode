@@ -5,7 +5,7 @@ description = "Privacy-first desktop AI coding agent"
 authors = ["Lamp Studios"]
 license = "MIT"
 edition = "2024"
-rust-version = "1.93"
+rust-version = "1.94"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -33,6 +33,8 @@ zeroize = "1"
 keyring = "4.2"
 age = "0.12"
 thiserror = "2"
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

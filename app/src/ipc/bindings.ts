@@ -19,6 +19,8 @@ export const commands = {
 	 */
 	ageUnlock: (passphrase: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("age_unlock", { passphrase }, options),
 	keychainSelfTest: (options?: InvokeOptions) => __TAURI_INVOKE<KeychainSelfTest>("keychain_self_test", undefined, options),
+	settingsGet: (options?: InvokeOptions) => __TAURI_INVOKE<Settings_Serialize>("settings_get", undefined, options),
+	settingsSet: (settings: Settings_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<null>("settings_set", { settings }, options),
 };
 
 /* Types */
@@ -39,3 +41,23 @@ export type KeychainSelfTest = {
 	ok: boolean,
 	message: string,
 };
+
+/**  App settings. Never holds secrets: keys live in the key store. */
+export type Settings = Settings_Serialize | Settings_Deserialize;
+
+/**  App settings. Never holds secrets: keys live in the key store. */
+export type Settings_Deserialize = {
+	theme?: Theme,
+	updateCheck?: UpdateCheck,
+};
+
+/**  App settings. Never holds secrets: keys live in the key store. */
+export type Settings_Serialize = {
+	theme: Theme,
+	updateCheck: UpdateCheck,
+};
+
+export type Theme = "dark" | "light" | "system";
+
+/**  Answer to the one-time first-launch question about update checks. */
+export type UpdateCheck = "notAsked" | "enabled" | "disabled";
