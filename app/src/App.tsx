@@ -1,9 +1,9 @@
-import { appConfig } from "../app.config";
+import { Home } from "./features/home/Home";
 
 export default function App() {
   return (
-    <main className="flex h-full items-center justify-center bg-night text-ink">
-      <h1 className="text-2xl font-semibold tracking-tight">{appConfig.name}</h1>
+    <main className="h-full overflow-auto bg-night text-ink">
+      <Home />
     </main>
   );
 }
